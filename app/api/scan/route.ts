@@ -36,7 +36,14 @@ export const POST = withRateLimit(scanRateLimiter, async (request: NextRequest) 
         ogBlockchain.calculateSecurityScore(address),
         blacklistDatabase.checkBlacklist(address, "address"),
         ogStorage.searchBlacklist({ value: address, type: "address" }),
-        ogCompute.analyzeTokenSecurity({
+        // AI analysis will be done after we have all the data
+        Promise.resolve(null),
+      ])
+
+      // Now run AI analysis with the collected data
+      let finalAiAnalysis = null
+      try {
+        finalAiAnalysis = await ogCompute.analyzeTokenSecurity({
           address,
           tokenInfo,
           contractAnalysis,
@@ -44,15 +51,14 @@ export const POST = withRateLimit(scanRateLimiter, async (request: NextRequest) 
           liquidityAnalysis,
           holderAnalysis,
           honeypotAnalysis,
-        }).catch(error => {
-          console.warn("AI analysis failed:", error)
-          return null
-        }),
-      ])
+        })
+      } catch (error) {
+        console.warn("AI analysis failed:", error)
+      }
 
       // Combine AI analysis with traditional security score
-      let trustScore = aiAnalysis 
-        ? Math.floor((securityScore.overall + (100 - aiAnalysis.riskScore)) / 2)
+      let trustScore = finalAiAnalysis 
+        ? Math.floor((securityScore.overall + (100 - finalAiAnalysis.riskScore)) / 2)
         : securityScore.overall
         
       const flags = [
@@ -62,9 +68,9 @@ export const POST = withRateLimit(scanRateLimiter, async (request: NextRequest) 
       ]
 
       // Add AI analysis findings
-      if (aiAnalysis) {
-        flags.push(`🤖 AI Confidence: ${aiAnalysis.confidence}%`)
-        aiAnalysis.findings.forEach(finding => {
+      if (finalAiAnalysis) {
+        flags.push(`🤖 AI Confidence: ${finalAiAnalysis.confidence}%`)
+        finalAiAnalysis.findings.forEach(finding => {
           flags.push(`🔍 ${finding}`)
         })
       }
@@ -136,9 +142,32 @@ export const POST = withRateLimit(scanRateLimiter, async (request: NextRequest) 
       }
     }
 
+    // Store scan result in 0G Storage for analytics
+    try {
+      await ogStorage.storeSecurityReport({
+        id: `scan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: "scan_result",
+        data: result,
+        metadata: {
+          userAgent: request.headers.get("user-agent"),
+          timestamp: new Date().toISOString(),
+          scanType: type,
+        },
+      })
+    } catch (error) {
+      console.warn("Failed to store scan result:", error)
+    }
+
     return NextResponse.json(result)
   } catch (error) {
+    if (error instanceof ValidationError) {
+      return NextResponse.json({ 
+        error: error.message,
+        field: error.field 
+      }, { status: 400 })
+    }
+    
     console.error("Scan API Error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
-}
+})

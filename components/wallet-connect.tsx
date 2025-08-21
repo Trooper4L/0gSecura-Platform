@@ -1,0 +1,333 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { ethers } from 'ethers'
+import { Wallet, ChevronDown, LogOut, AlertCircle, CheckCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+
+// 0G Galileo Testnet Configuration
+const OG_GALILEO_TESTNET = {
+  chainId: '0x40E9', // 16601 in hex
+  chainName: '0G Galileo Testnet',
+  nativeCurrency: {
+    name: '0G Token',
+    symbol: 'OG',
+    decimals: 18,
+  },
+  rpcUrls: ['https://evmrpc-testnet.0g.ai'],
+  blockExplorerUrls: ['https://chainscan-galileo.0g.ai'],
+}
+
+interface WalletState {
+  isConnected: boolean
+  address: string
+  balance: string
+  chainId: string
+  isCorrectNetwork: boolean
+}
+
+export function WalletConnect() {
+  const [wallet, setWallet] = useState<WalletState>({
+    isConnected: false,
+    address: '',
+    balance: '0',
+    chainId: '',
+    isCorrectNetwork: false,
+  })
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    checkWalletConnection()
+    setupEventListeners()
+  }, [])
+
+  const setupEventListeners = () => {
+    if (typeof window !== 'undefined' && window.ethereum) {
+      window.ethereum.on('accountsChanged', handleAccountsChanged)
+      window.ethereum.on('chainChanged', handleChainChanged)
+    }
+  }
+
+  const handleAccountsChanged = (accounts: string[]) => {
+    if (accounts.length === 0) {
+      disconnectWallet()
+    } else {
+      updateWalletInfo()
+    }
+  }
+
+  const handleChainChanged = (chainId: string) => {
+    setWallet(prev => ({
+      ...prev,
+      chainId,
+      isCorrectNetwork: chainId === OG_GALILEO_TESTNET.chainId
+    }))
+    updateWalletInfo()
+  }
+
+  const checkWalletConnection = async () => {
+    if (typeof window !== 'undefined' && window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' })
+        if (accounts.length > 0) {
+          await updateWalletInfo()
+        }
+      } catch (error) {
+        console.error('Error checking wallet connection:', error)
+      }
+    }
+  }
+
+  const connectWallet = async () => {
+    if (typeof window === 'undefined' || !window.ethereum) {
+      setError('Please install MetaMask or another Web3 wallet')
+      return
+    }
+
+    setIsConnecting(true)
+    setError('')
+
+    try {
+      // Request account access
+      await window.ethereum.request({ method: 'eth_requestAccounts' })
+      await updateWalletInfo()
+      
+      // Check if user needs to switch networks
+      const chainId = await window.ethereum.request({ method: 'eth_chainId' })
+      if (chainId !== OG_GALILEO_TESTNET.chainId) {
+        await switchToOGNetwork()
+      }
+    } catch (error: any) {
+      setError(error.message || 'Failed to connect wallet')
+    } finally {
+      setIsConnecting(false)
+    }
+  }
+
+  const switchToOGNetwork = async () => {
+    if (!window.ethereum) return
+
+    setIsSwitchingNetwork(true)
+    setError('')
+
+    try {
+      // Try to switch to the network
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: OG_GALILEO_TESTNET.chainId }],
+      })
+    } catch (switchError: any) {
+      // If the network doesn't exist, add it
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [OG_GALILEO_TESTNET],
+          })
+        } catch (addError: any) {
+          setError('Failed to add 0G Galileo Testnet: ' + addError.message)
+        }
+      } else {
+        setError('Failed to switch network: ' + switchError.message)
+      }
+    } finally {
+      setIsSwitchingNetwork(false)
+    }
+  }
+
+  const updateWalletInfo = async () => {
+    if (!window.ethereum) return
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const signer = await provider.getSigner()
+      const address = await signer.getAddress()
+      const balance = await provider.getBalance(address)
+      const network = await provider.getNetwork()
+      
+      setWallet({
+        isConnected: true,
+        address,
+        balance: ethers.formatEther(balance),
+        chainId: '0x' + network.chainId.toString(16),
+        isCorrectNetwork: '0x' + network.chainId.toString(16) === OG_GALILEO_TESTNET.chainId,
+      })
+    } catch (error) {
+      console.error('Error updating wallet info:', error)
+    }
+  }
+
+  const disconnectWallet = () => {
+    setWallet({
+      isConnected: false,
+      address: '',
+      balance: '0',
+      chainId: '',
+      isCorrectNetwork: false,
+    })
+  }
+
+  const formatAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`
+  }
+
+  const formatBalance = (balance: string) => {
+    return parseFloat(balance).toFixed(4)
+  }
+
+  if (!wallet.isConnected) {
+    return (
+      <Card className="w-full max-w-md mx-auto">
+        <CardHeader className="text-center">
+          <CardTitle className="flex items-center justify-center gap-2">
+            <Wallet className="w-6 h-6" />
+            Connect Wallet
+          </CardTitle>
+          <CardDescription>
+            Connect your wallet to access 0gSecura security features
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <Alert className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
+          <Button 
+            onClick={connectWallet} 
+            className="w-full" 
+            disabled={isConnecting}
+          >
+            {isConnecting ? 'Connecting...' : 'Connect MetaMask'}
+          </Button>
+          
+          <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+            <p className="text-sm text-blue-700 dark:text-blue-300 font-medium mb-2">
+              Required Network:
+            </p>
+            <div className="space-y-1 text-sm text-blue-600 dark:text-blue-400">
+              <p>• Network: 0G Galileo Testnet</p>
+              <p>• Chain ID: 16601</p>
+              <p>• RPC: evmrpc-testnet.0g.ai</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-4">
+      {/* Network Status */}
+      <Badge variant={wallet.isCorrectNetwork ? 'default' : 'destructive'} className="flex items-center gap-1">
+        {wallet.isCorrectNetwork ? (
+          <>
+            <CheckCircle className="w-3 h-3" />
+            0G Testnet
+          </>
+        ) : (
+          <>
+            <AlertCircle className="w-3 h-3" />
+            Wrong Network
+          </>
+        )}
+      </Badge>
+
+      {/* Network Switch Button */}
+      {!wallet.isCorrectNetwork && (
+        <Button
+          onClick={switchToOGNetwork}
+          disabled={isSwitchingNetwork}
+          size="sm"
+          variant="outline"
+        >
+          {isSwitchingNetwork ? 'Switching...' : 'Switch to 0G'}
+        </Button>
+      )}
+
+      {/* Wallet Dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="flex items-center gap-2">
+            <Wallet className="w-4 h-4" />
+            <div className="text-left">
+              <div className="text-sm font-medium">
+                {formatAddress(wallet.address)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {formatBalance(wallet.balance)} OG
+              </div>
+            </div>
+            <ChevronDown className="w-4 h-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        
+        <DropdownMenuContent align="end" className="w-64">
+          <div className="px-3 py-2">
+            <p className="text-sm font-medium">Account Details</p>
+            <p className="text-xs text-muted-foreground break-all">
+              {wallet.address}
+            </p>
+          </div>
+          
+          <DropdownMenuSeparator />
+          
+          <div className="px-3 py-2 space-y-1">
+            <div className="flex justify-between text-sm">
+              <span>Balance:</span>
+              <span className="font-medium">{formatBalance(wallet.balance)} OG</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Network:</span>
+              <span className={wallet.isCorrectNetwork ? 'text-green-600' : 'text-red-600'}>
+                {wallet.isCorrectNetwork ? '0G Testnet' : 'Unsupported'}
+              </span>
+            </div>
+          </div>
+          
+          <DropdownMenuSeparator />
+          
+          {!wallet.isCorrectNetwork && (
+            <DropdownMenuItem onClick={switchToOGNetwork} disabled={isSwitchingNetwork}>
+              <AlertCircle className="w-4 h-4 mr-2" />
+              {isSwitchingNetwork ? 'Switching Network...' : 'Switch to 0G Testnet'}
+            </DropdownMenuItem>
+          )}
+          
+          <DropdownMenuItem onClick={disconnectWallet}>
+            <LogOut className="w-4 h-4 mr-2" />
+            Disconnect Wallet
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      
+      {error && (
+        <Alert className="mt-2">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+    </div>
+  )
+}
+
+// Global window interface extension for TypeScript
+declare global {
+  interface Window {
+    ethereum?: any
+  }
+}

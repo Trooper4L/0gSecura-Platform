@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
+import { apiClient } from "@/lib/api-client"
 
 interface ScanResult {
   type: "token" | "website"
@@ -87,26 +88,13 @@ export function SecurityScanner() {
         })
       }, 200)
 
-      const response = await fetch("/api/scan", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          type: activeTab,
-          address: scanInput.trim(),
-        }),
-      })
+      const result = activeTab === "token" 
+        ? await apiClient.scanToken(scanInput.trim())
+        : await apiClient.scanWebsite(scanInput.trim())
 
       clearInterval(progressInterval)
       setScanProgress(100)
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Scan failed")
-      }
-
-      const result = await response.json()
       setScanResult(result)
 
       // Show success toast

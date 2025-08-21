@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { SecurityScanner } from "@/components/security-scanner"
 import { ThreatAlerts } from "@/components/threat-alerts"
+import { WalletConnect } from "@/components/wallet-connect"
 
 export default function HomePage() {
   return (
@@ -20,11 +21,8 @@ export default function HomePage() {
                 <p className="text-sm text-slate-600 dark:text-slate-400">Protecting the 0g blockchain ecosystem</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-green-600 border-green-200">
-                <CheckCircle className="w-3 h-3 mr-1" />
-                0g Network Connected
-              </Badge>
+            <div className="flex items-center gap-4">
+              <WalletConnect />
             </div>
           </div>
         </div>

@@ -128,9 +128,12 @@ class OgBlockchainService {
     this.storageEndpoint = process.env.OG_STORAGE_ENDPOINT || "https://storage.0g.ai"
     this.daEndpoint = process.env.OG_DA_ENDPOINT || "https://da.0g.ai"
     
-    // Initialize 0G blockchain provider
-    const rpcUrl = process.env.OG_CHAIN_RPC_URL || "https://rpc.0g.ai"
-    this.provider = new ethers.JsonRpcProvider(rpcUrl)
+    // Initialize 0G Galileo Testnet provider
+    const rpcUrl = process.env.OG_CHAIN_RPC_URL || "https://evmrpc-testnet.0g.ai"
+    this.provider = new ethers.JsonRpcProvider(rpcUrl, {
+      chainId: parseInt(process.env.OG_CHAIN_ID || "16601"),
+      name: process.env.OG_NETWORK_NAME || "0G-Galileo-Testnet",
+    })
   }
 
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
@@ -239,7 +242,7 @@ class OgBlockchainService {
         sourceCode,
         compiler: "Unknown",
         constructorArgs: "0x",
-        creationTx: creationInfo.creationTx || "Unknown",
+        creationTx: "Unknown", // Would need block explorer API to get creation tx
         creator: creationInfo.creator,
         hasProxyPattern: codeAnalysis.hasProxyPattern,
         hasUpgradeability: codeAnalysis.hasUpgradeability,
@@ -260,61 +263,107 @@ class OgBlockchainService {
   }
 
   async getTransactionPatterns(address: string): Promise<TransactionPattern> {
-    const totalTx = Math.floor(Math.random() * 50000) + 1000
-    const uniqueAddresses = Math.floor(totalTx * (0.3 + Math.random() * 0.4))
-    const botActivity = Math.floor(Math.random() * 30)
-    const washTradingScore = Math.floor(Math.random() * 100)
+    try {
+      // Get transaction history from 0G blockchain
+      const currentBlock = await this.provider.getBlockNumber()
+      const fromBlock = Math.max(0, currentBlock - 10000) // Last ~10k blocks
+      
+      // Get all transactions involving this address
+      const filter = {
+        address,
+        fromBlock,
+        toBlock: currentBlock,
+      }
 
-    const suspiciousPatterns = []
-    let riskScore = 0
+      // Note: This is a simplified approach. In production, you'd use indexed APIs
+      const events = await this.provider.getLogs(filter)
+      const totalTransactions = events.length
 
-    if (botActivity > 20) {
-      suspiciousPatterns.push("High bot activity detected")
-      riskScore += 25
-    }
+      if (totalTransactions === 0) {
+        return {
+          address,
+          totalTransactions: 0,
+          uniqueAddresses: 0,
+          suspiciousPatterns: ["No transaction history found"],
+          riskScore: 50,
+          averageTransactionValue: "0",
+          largeTransactions: 0,
+          frequentTraders: 0,
+          botActivity: 0,
+          washTradingScore: 0,
+          liquidityEvents: {
+            liquidityAdded: 0,
+            liquidityRemoved: 0,
+            rugPullRisk: 100, // High risk for contracts with no history
+          },
+        }
+      }
 
-    if (washTradingScore > 70) {
-      suspiciousPatterns.push("Potential wash trading")
-      riskScore += 30
-    }
+      // Analyze transaction patterns
+      const uniqueAddresses = new Set(events.map(e => e.address)).size
+      const suspiciousPatterns = []
+      let riskScore = 0
 
-    if (uniqueAddresses / totalTx < 0.1) {
-      suspiciousPatterns.push("Low unique address ratio")
-      riskScore += 20
-    }
+      // Check for suspicious patterns
+      if (uniqueAddresses / totalTransactions < 0.1) {
+        suspiciousPatterns.push("Low unique address ratio - possible bot activity")
+        riskScore += 30
+      }
 
-    return {
-      address,
-      totalTransactions: totalTx,
-      uniqueAddresses,
-      suspiciousPatterns,
-      riskScore: Math.min(riskScore, 100),
-      averageTransactionValue: (Math.random() * 1000).toFixed(4),
-      largeTransactions: Math.floor(totalTx * 0.05),
-      frequentTraders: Math.floor(uniqueAddresses * 0.1),
-      botActivity,
-      washTradingScore,
-      liquidityEvents: {
-        liquidityAdded: Math.floor(Math.random() * 10),
-        liquidityRemoved: Math.floor(Math.random() * 5),
-        rugPullRisk: Math.floor(Math.random() * 100),
-      },
+      if (totalTransactions > 1000 && uniqueAddresses < 10) {
+        suspiciousPatterns.push("High transaction volume with few participants")
+        riskScore += 40
+      }
+
+      return {
+        address,
+        totalTransactions,
+        uniqueAddresses,
+        suspiciousPatterns,
+        riskScore: Math.min(riskScore, 100),
+        averageTransactionValue: "0", // Would need detailed transaction analysis
+        largeTransactions: 0,
+        frequentTraders: Math.min(uniqueAddresses, 10),
+        botActivity: riskScore > 30 ? Math.floor(riskScore / 2) : 0,
+        washTradingScore: riskScore,
+        liquidityEvents: {
+          liquidityAdded: 0, // Would need to parse specific events
+          liquidityRemoved: 0,
+          rugPullRisk: riskScore,
+        },
+      }
+    } catch (error) {
+      console.error("Error analyzing transaction patterns:", error)
+      throw new Error(`Failed to analyze transaction patterns: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   async analyzeLiquidity(address: string): Promise<LiquidityAnalysis> {
-    const liquidityLocked = Math.random() > 0.4
-    const poolAge = Math.floor(Math.random() * 365)
-
-    return {
-      totalLiquidity: (Math.random() * 1000000).toFixed(2),
-      liquidityLocked,
-      lockDuration: liquidityLocked ? Math.floor(Math.random() * 365) + 30 : 0,
-      liquidityProvider: this.generateMockAddress(),
-      poolAge,
-      liquidityStability: poolAge > 30 ? Math.floor(Math.random() * 40) + 60 : Math.floor(Math.random() * 60),
-      impactFor1ETH: Math.random() * 5,
-      impactFor10ETH: Math.random() * 15 + 5,
+    try {
+      // This would typically query DEX contracts or liquidity pool data
+      // For now, implementing basic analysis based on available data
+      
+      // Get token balance and holder information
+      const currentBlock = await this.provider.getBlockNumber()
+      const deploymentBlock = Math.max(0, currentBlock - 50000) // Estimate deployment
+      
+      // Basic liquidity analysis
+      const poolAge = currentBlock - deploymentBlock
+      const liquidityLocked = false // Would need to check lock contracts
+      
+      return {
+        totalLiquidity: "0", // Would need DEX integration
+        liquidityLocked,
+        lockDuration: liquidityLocked ? 0 : 0,
+        liquidityProvider: "Unknown", // Would need to trace LP tokens
+        poolAge,
+        liquidityStability: poolAge > 1000 ? 80 : poolAge > 100 ? 60 : 30,
+        impactFor1ETH: 0, // Would need price impact calculation
+        impactFor10ETH: 0,
+      }
+    } catch (error) {
+      console.error("Error analyzing liquidity:", error)
+      throw new Error(`Failed to analyze liquidity: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -590,6 +639,28 @@ class OgBlockchainService {
 
   async getBlacklistDetails(address: string): Promise<any[]> {
     return await blacklistDatabase.checkBlacklist(address, "address")
+  }
+
+  async getBlockNumber(): Promise<number> {
+    try {
+      return await this.provider.getBlockNumber()
+    } catch (error) {
+      console.error("Failed to get block number:", error)
+      throw new Error("Failed to connect to 0G blockchain")
+    }
+  }
+
+  async getNetworkInfo(): Promise<{ chainId: number; name: string }> {
+    try {
+      const network = await this.provider.getNetwork()
+      return {
+        chainId: Number(network.chainId),
+        name: network.name,
+      }
+    } catch (error) {
+      console.error("Failed to get network info:", error)
+      throw new Error("Failed to get network information")
+    }
   }
 }
 

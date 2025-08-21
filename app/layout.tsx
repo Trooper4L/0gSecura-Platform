@@ -2,11 +2,13 @@ import type React from "react"
 import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
+import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
 
 export const metadata: Metadata = {
   title: "0gSecura - Blockchain Security Scanner",
-  description: "Protecting the 0g blockchain ecosystem from phishing, scams, and malicious actors",
+  description: "Comprehensive security platform for the 0G Network ecosystem. Real-time threat detection, smart contract analysis, and community-driven blacklist management.",
+  keywords: "blockchain, security, 0G Network, threat detection, smart contract, phishing protection",
   generator: "v0.app",
 }
 
@@ -16,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <style>{`
 html {
@@ -26,7 +28,16 @@ html {
 }
         `}</style>
       </head>
-      <body>{children}</body>
+      <body>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   )
 }

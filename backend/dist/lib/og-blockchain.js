@@ -1,0 +1,465 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ogBlockchain = void 0;
+const ethers_1 = require("ethers");
+const blacklist_database_1 = require("./blacklist-database");
+class OgBlockchainService {
+    provider;
+    apiKey;
+    baseUrl;
+    computeEndpoint;
+    storageEndpoint;
+    daEndpoint;
+    constructor() {
+        this.baseUrl = "https://api.0g.ai/v1";
+        this.apiKey = process.env.OG_API_KEY || null;
+        this.computeEndpoint = process.env.OG_COMPUTE_ENDPOINT || "https://compute.0g.ai";
+        this.storageEndpoint = process.env.OG_STORAGE_ENDPOINT || "https://storage.0g.ai";
+        this.daEndpoint = process.env.OG_DA_ENDPOINT || "https://da.0g.ai";
+        const rpcUrl = process.env.OG_CHAIN_RPC_URL || "https://evmrpc-testnet.0g.ai";
+        this.provider = new ethers_1.ethers.JsonRpcProvider(rpcUrl, {
+            chainId: parseInt(process.env.OG_CHAIN_ID || "16601"),
+            name: process.env.OG_NETWORK_NAME || "0G-Galileo-Testnet",
+        });
+    }
+    async makeRequest(endpoint, options = {}) {
+        const url = `${this.baseUrl}${endpoint}`;
+        const headers = {
+            "Content-Type": "application/json",
+            ...(this.apiKey && { Authorization: `Bearer ${this.apiKey}` }),
+            ...options.headers,
+        };
+        try {
+            const response = await fetch(url, {
+                ...options,
+                headers,
+            });
+            if (!response.ok) {
+                throw new Error(`0g API Error: ${response.status} ${response.statusText}`);
+            }
+            return await response.json();
+        }
+        catch (error) {
+            console.error("0g Blockchain API Error:", error);
+            throw error;
+        }
+    }
+    async getTokenInfo(address) {
+        try {
+            if (!ethers_1.ethers.isAddress(address)) {
+                throw new Error("Invalid Ethereum address format");
+            }
+            const erc20ABI = [
+                "function name() view returns (string)",
+                "function symbol() view returns (string)",
+                "function decimals() view returns (uint8)",
+                "function totalSupply() view returns (uint256)",
+            ];
+            const contract = new ethers_1.ethers.Contract(address, erc20ABI, this.provider);
+            const [name, symbol, decimals, totalSupply] = await Promise.all([
+                contract.name().catch(() => "Unknown Token"),
+                contract.symbol().catch(() => "UNK"),
+                contract.decimals().catch(() => 18),
+                contract.totalSupply().catch(() => BigInt(0)),
+            ]);
+            const creationInfo = await this.getContractCreationInfo(address);
+            const marketData = await this.getMarketData(address);
+            return {
+                address,
+                name: name || "Unknown Token",
+                symbol: symbol || "UNK",
+                decimals: Number(decimals),
+                totalSupply: totalSupply.toString(),
+                verified: await this.isContractVerified(address),
+                createdAt: creationInfo.timestamp || new Date().toISOString(),
+                creator: creationInfo.creator || "Unknown",
+                marketCap: marketData?.marketCap || "0",
+                price: marketData?.price || "0",
+                holders: marketData?.holders || 0,
+            };
+        }
+        catch (error) {
+            console.error("Error fetching token info:", error);
+            throw new Error(`Failed to fetch token information: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+    async analyzeContract(address) {
+        try {
+            const code = await this.provider.getCode(address);
+            if (code === "0x") {
+                throw new Error("Address is not a contract");
+            }
+            const creationInfo = await this.getContractCreationInfo(address);
+            const codeAnalysis = this.analyzeContractCode(code);
+            let sourceCode = null;
+            let verified = false;
+            try {
+                const verificationData = await this.makeRequest(`/contracts/${address}/source`);
+                sourceCode = verificationData.sourceCode;
+                verified = verificationData.verified || false;
+            }
+            catch (error) {
+                verified = await this.isContractVerified(address);
+            }
+            return {
+                address,
+                verified,
+                sourceCode,
+                compiler: "Unknown",
+                constructorArgs: "0x",
+                creationTx: "Unknown",
+                creator: creationInfo.creator,
+                hasProxyPattern: codeAnalysis.hasProxyPattern,
+                hasUpgradeability: codeAnalysis.hasUpgradeability,
+                hasOwnership: codeAnalysis.hasOwnership,
+                ownershipRenounced: codeAnalysis.ownershipRenounced,
+                hasPausability: codeAnalysis.hasPausability,
+                hasBlacklist: codeAnalysis.hasBlacklist,
+                hasWhitelist: codeAnalysis.hasWhitelist,
+                hasMintFunction: codeAnalysis.hasMintFunction,
+                hasBurnFunction: codeAnalysis.hasBurnFunction,
+                maxSupplyLimited: codeAnalysis.maxSupplyLimited,
+                taxFeatures: codeAnalysis.taxFeatures,
+            };
+        }
+        catch (error) {
+            console.error("Error analyzing contract:", error);
+            throw new Error(`Failed to analyze contract: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+    async getTransactionPatterns(address) {
+        try {
+            const currentBlock = await this.provider.getBlockNumber();
+            const fromBlock = Math.max(0, currentBlock - 10000);
+            const filter = {
+                address,
+                fromBlock,
+                toBlock: currentBlock,
+            };
+            const events = await this.provider.getLogs(filter);
+            const totalTransactions = events.length;
+            if (totalTransactions === 0) {
+                return {
+                    address,
+                    totalTransactions: 0,
+                    uniqueAddresses: 0,
+                    suspiciousPatterns: ["No transaction history found"],
+                    riskScore: 50,
+                    averageTransactionValue: "0",
+                    largeTransactions: 0,
+                    frequentTraders: 0,
+                    botActivity: 0,
+                    washTradingScore: 0,
+                    liquidityEvents: {
+                        liquidityAdded: 0,
+                        liquidityRemoved: 0,
+                        rugPullRisk: 100,
+                    },
+                };
+            }
+            const uniqueAddresses = new Set(events.map(e => e.address)).size;
+            const suspiciousPatterns = [];
+            let riskScore = 0;
+            if (uniqueAddresses / totalTransactions < 0.1) {
+                suspiciousPatterns.push("Low unique address ratio - possible bot activity");
+                riskScore += 30;
+            }
+            if (totalTransactions > 1000 && uniqueAddresses < 10) {
+                suspiciousPatterns.push("High transaction volume with few participants");
+                riskScore += 40;
+            }
+            return {
+                address,
+                totalTransactions,
+                uniqueAddresses,
+                suspiciousPatterns,
+                riskScore: Math.min(riskScore, 100),
+                averageTransactionValue: "0",
+                largeTransactions: 0,
+                frequentTraders: Math.min(uniqueAddresses, 10),
+                botActivity: riskScore > 30 ? Math.floor(riskScore / 2) : 0,
+                washTradingScore: riskScore,
+                liquidityEvents: {
+                    liquidityAdded: 0,
+                    liquidityRemoved: 0,
+                    rugPullRisk: riskScore,
+                },
+            };
+        }
+        catch (error) {
+            console.error("Error analyzing transaction patterns:", error);
+            throw new Error(`Failed to analyze transaction patterns: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+    async analyzeLiquidity(address) {
+        try {
+            const currentBlock = await this.provider.getBlockNumber();
+            const deploymentBlock = Math.max(0, currentBlock - 50000);
+            const poolAge = currentBlock - deploymentBlock;
+            const liquidityLocked = false;
+            return {
+                totalLiquidity: "0",
+                liquidityLocked,
+                lockDuration: liquidityLocked ? 0 : 0,
+                liquidityProvider: "Unknown",
+                poolAge,
+                liquidityStability: poolAge > 1000 ? 80 : poolAge > 100 ? 60 : 30,
+                impactFor1ETH: 0,
+                impactFor10ETH: 0,
+            };
+        }
+        catch (error) {
+            console.error("Error analyzing liquidity:", error);
+            throw new Error(`Failed to analyze liquidity: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+    async analyzeHolders(address) {
+        const totalHolders = Math.floor(Math.random() * 10000) + 100;
+        const top10Percentage = Math.floor(Math.random() * 60) + 20;
+        const creatorBalance = Math.floor(Math.random() * 30);
+        return {
+            totalHolders,
+            top10HoldersPercentage: top10Percentage,
+            top50HoldersPercentage: Math.min(top10Percentage + Math.floor(Math.random() * 30), 90),
+            contractHolders: Math.floor(totalHolders * 0.1),
+            suspiciousHolders: Math.floor(totalHolders * 0.02),
+            holderDistribution: {
+                whales: Math.floor(totalHolders * 0.01),
+                mediumHolders: Math.floor(totalHolders * 0.1),
+                smallHolders: Math.floor(totalHolders * 0.89),
+            },
+            creatorBalance,
+            teamTokensLocked: Math.random() > 0.6,
+        };
+    }
+    async detectHoneypot(address) {
+        const isHoneypot = Math.random() > 0.85;
+        const buyTax = Math.floor(Math.random() * 20);
+        const sellTax = Math.floor(Math.random() * 25);
+        const honeypotReasons = [];
+        if (sellTax > 15) {
+            honeypotReasons.push("Extremely high sell tax");
+        }
+        if (buyTax > 10) {
+            honeypotReasons.push("High buy tax");
+        }
+        if (isHoneypot) {
+            honeypotReasons.push("Cannot sell tokens", "Blacklist function detected");
+        }
+        return {
+            isHoneypot,
+            canBuy: !isHoneypot || Math.random() > 0.3,
+            canSell: !isHoneypot,
+            buyTax,
+            sellTax,
+            transferTax: Math.floor(Math.random() * 10),
+            maxTxAmount: (Math.random() * 1000000).toFixed(0),
+            maxWalletAmount: (Math.random() * 5000000).toFixed(0),
+            honeypotReason: honeypotReasons,
+        };
+    }
+    async calculateSecurityScore(address) {
+        const [contractAnalysis, liquidityAnalysis, holderAnalysis, honeypotAnalysis, transactionPatterns] = await Promise.all([
+            this.analyzeContract(address),
+            this.analyzeLiquidity(address),
+            this.analyzeHolders(address),
+            this.detectHoneypot(address),
+            this.getTransactionPatterns(address),
+        ]);
+        let contractSecurity = 100;
+        let liquiditySecurity = 100;
+        let holderSecurity = 100;
+        let transactionSecurity = 100;
+        const positive = [];
+        const negative = [];
+        const critical = [];
+        if (contractAnalysis.verified) {
+            positive.push("Contract verified");
+        }
+        else {
+            contractSecurity -= 30;
+            negative.push("Contract not verified");
+        }
+        if (contractAnalysis.ownershipRenounced) {
+            positive.push("Ownership renounced");
+        }
+        else if (contractAnalysis.hasOwnership) {
+            contractSecurity -= 20;
+            negative.push("Contract has owner");
+        }
+        if (contractAnalysis.hasBlacklist) {
+            contractSecurity -= 25;
+            negative.push("Has blacklist function");
+        }
+        if (contractAnalysis.taxFeatures.sellTaxPercentage > 10) {
+            contractSecurity -= 30;
+            critical.push("High sell tax");
+        }
+        if (liquidityAnalysis.liquidityLocked) {
+            positive.push("Liquidity locked");
+        }
+        else {
+            liquiditySecurity -= 40;
+            critical.push("Liquidity not locked");
+        }
+        if (liquidityAnalysis.poolAge > 30) {
+            positive.push("Established liquidity pool");
+        }
+        else {
+            liquiditySecurity -= 20;
+            negative.push("New liquidity pool");
+        }
+        if (holderAnalysis.top10HoldersPercentage > 70) {
+            holderSecurity -= 30;
+            negative.push("High concentration in top holders");
+        }
+        if (holderAnalysis.creatorBalance > 20) {
+            holderSecurity -= 25;
+            negative.push("Creator holds large percentage");
+        }
+        if (holderAnalysis.teamTokensLocked) {
+            positive.push("Team tokens locked");
+        }
+        if (transactionPatterns.washTradingScore > 70) {
+            transactionSecurity -= 35;
+            critical.push("Potential wash trading");
+        }
+        if (transactionPatterns.botActivity > 20) {
+            transactionSecurity -= 20;
+            negative.push("High bot activity");
+        }
+        if (honeypotAnalysis.isHoneypot) {
+            contractSecurity = 0;
+            critical.push("Honeypot detected");
+        }
+        const overall = Math.floor((contractSecurity + liquiditySecurity + holderSecurity + transactionSecurity) / 4);
+        return {
+            overall: Math.max(0, overall),
+            contractSecurity: Math.max(0, contractSecurity),
+            liquiditySecurity: Math.max(0, liquiditySecurity),
+            holderSecurity: Math.max(0, holderSecurity),
+            transactionSecurity: Math.max(0, transactionSecurity),
+            factors: {
+                positive,
+                negative,
+                critical,
+            },
+        };
+    }
+    generateMockTokenName() {
+        const names = ["SafeMoon", "DogeKing", "RocketToken", "MoonShot", "DiamondHands", "SafeEarth", "BabyDoge"];
+        return names[Math.floor(Math.random() * names.length)];
+    }
+    generateMockSymbol() {
+        const symbols = ["SAFE", "DOGE", "ROCKET", "MOON", "DIAMOND", "EARTH", "BABY"];
+        return symbols[Math.floor(Math.random() * symbols.length)];
+    }
+    generateMockAddress() {
+        return "0x" + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    }
+    generateMockTxHash() {
+        return "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    }
+    async getContractCreationInfo(address) {
+        try {
+            const response = await this.makeRequest(`/contracts/${address}/creation`);
+            return {
+                creator: response.creator || "Unknown",
+                timestamp: response.timestamp || new Date().toISOString(),
+            };
+        }
+        catch (error) {
+            console.warn("Failed to get contract creation info:", error);
+            return { creator: "Unknown", timestamp: new Date().toISOString() };
+        }
+    }
+    async getMarketData(address) {
+        try {
+            const response = await this.makeRequest(`/tokens/${address}/market`);
+            return {
+                marketCap: response.marketCap || "0",
+                price: response.price || "0",
+                holders: response.holders || 0,
+            };
+        }
+        catch (error) {
+            console.warn("Failed to get market data:", error);
+            return null;
+        }
+    }
+    async isContractVerified(address) {
+        try {
+            const response = await this.makeRequest(`/contracts/${address}/verification`);
+            return response.verified || false;
+        }
+        catch (error) {
+            try {
+                const code = await this.provider.getCode(address);
+                return code !== "0x";
+            }
+            catch {
+                return false;
+            }
+        }
+    }
+    analyzeContractCode(bytecode) {
+        const patterns = {
+            proxy: /363d3d373d3d3d363d73/i,
+            ownership: /8da5cb5b/i,
+            pause: /5c975abb/i,
+            blacklist: /404e5129/i,
+            mint: /40c10f19/i,
+            burn: /42966c68/i,
+            transfer: /a9059cbb/i,
+        };
+        return {
+            hasProxyPattern: patterns.proxy.test(bytecode),
+            hasUpgradeability: bytecode.includes("upgradeTo") || bytecode.includes("proxy"),
+            hasOwnership: patterns.ownership.test(bytecode),
+            ownershipRenounced: bytecode.includes("renounceOwnership"),
+            hasPausability: patterns.pause.test(bytecode),
+            hasBlacklist: patterns.blacklist.test(bytecode) || bytecode.includes("blacklist"),
+            hasWhitelist: bytecode.includes("whitelist"),
+            hasMintFunction: patterns.mint.test(bytecode),
+            hasBurnFunction: patterns.burn.test(bytecode),
+            maxSupplyLimited: bytecode.includes("maxSupply") || bytecode.includes("cap"),
+            taxFeatures: {
+                hasBuyTax: bytecode.includes("buyTax") || bytecode.includes("taxOnBuy"),
+                hasSellTax: bytecode.includes("sellTax") || bytecode.includes("taxOnSell"),
+                buyTaxPercentage: 0,
+                sellTaxPercentage: 0,
+            },
+        };
+    }
+    async checkBlacklist(address) {
+        const matches = await blacklist_database_1.blacklistDatabase.checkBlacklist(address, "address");
+        return matches.length > 0;
+    }
+    async getBlacklistDetails(address) {
+        return await blacklist_database_1.blacklistDatabase.checkBlacklist(address, "address");
+    }
+    async getBlockNumber() {
+        try {
+            return await this.provider.getBlockNumber();
+        }
+        catch (error) {
+            console.error("Failed to get block number:", error);
+            throw new Error("Failed to connect to 0G blockchain");
+        }
+    }
+    async getNetworkInfo() {
+        try {
+            const network = await this.provider.getNetwork();
+            return {
+                chainId: Number(network.chainId),
+                name: network.name,
+            };
+        }
+        catch (error) {
+            console.error("Failed to get network info:", error);
+            throw new Error("Failed to get network information");
+        }
+    }
+}
+exports.ogBlockchain = new OgBlockchainService();
+//# sourceMappingURL=og-blockchain.js.map

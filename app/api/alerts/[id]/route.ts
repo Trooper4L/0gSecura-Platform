@@ -1,9 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { alertSystem } from "@/lib/alert-system"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const alert = await alertSystem.getAlertById(params.id)
+    const { id } = await params
+    const alert = await alertSystem.getAlertById(id)
 
     if (!alert) {
       return NextResponse.json({ error: "Alert not found" }, { status: 404 })
@@ -16,12 +17,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const { action, ...data } = await request.json()
 
     if (action === "vote") {
-      const success = await alertSystem.voteOnAlert(params.id, data.vote)
+      const success = await alertSystem.voteOnAlert(id, data.vote)
       if (!success) {
         return NextResponse.json({ error: "Alert not found" }, { status: 404 })
       }
@@ -29,7 +31,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     if (action === "update-status") {
-      const success = await alertSystem.updateAlertStatus(params.id, data.status)
+      const success = await alertSystem.updateAlertStatus(id, data.status)
       if (!success) {
         return NextResponse.json({ error: "Alert not found" }, { status: 404 })
       }
@@ -37,7 +39,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     if (action === "add-evidence") {
-      const success = await alertSystem.addEvidence(params.id, data.evidence)
+      const success = await alertSystem.addEvidence(id, data.evidence)
       if (!success) {
         return NextResponse.json({ error: "Alert not found" }, { status: 404 })
       }

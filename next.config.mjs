@@ -1,13 +1,58 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
+  serverExternalPackages: ['ethers'],
+  
+  // Enable standalone output for Docker
+  output: 'standalone',
+  
+  // Security headers
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+        ],
+      },
+    ]
   },
-  typescript: {
-    ignoreBuildErrors: true,
+  
+  // Environment variables to expose to the client
+  env: {
+    OG_CHAIN_ID: process.env.OG_CHAIN_ID,
+    OG_NETWORK_NAME: process.env.OG_NETWORK_NAME,
+    OG_CHAIN_EXPLORER: process.env.OG_CHAIN_EXPLORER,
+    OG_STORAGE_EXPLORER: process.env.OG_STORAGE_EXPLORER,
   },
-  images: {
-    unoptimized: true,
+  
+  // Webpack configuration for 0G SDK
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Exclude server-only modules from client bundle
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+      }
+    }
+    
+    return config
   },
 }
 
