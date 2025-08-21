@@ -82,7 +82,7 @@ class OgStorageService {
 
       // Create blob and file for 0G Storage
       const blob = new Blob([jsonData], { type: "application/json" })
-      const file = new ZgFile(blob)
+      const file = new ZgFile(blob, blob.size)
 
       // Generate Merkle tree for the file
       const [tree, treeErr] = await file.merkleTree()
