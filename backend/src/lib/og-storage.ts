@@ -81,7 +81,8 @@ class OgStorageService {
       })
 
       // Create file for 0G Storage
-      const file = new ZgFile(Buffer.from(jsonData, 'utf-8'))
+      const filename = `blacklist-${Date.now()}.json`
+      const file = new ZgFile(Buffer.from(jsonData, 'utf-8'), filename)
 
       // Generate Merkle tree for the file
       const [tree, treeErr] = await file.merkleTree()
