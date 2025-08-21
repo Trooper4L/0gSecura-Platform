@@ -62,6 +62,8 @@ class OgStorageService {
 
 
   async uploadBlacklistData(data: BlacklistData[]): Promise<string> {
+    let tempFilePath: string | null = null
+    
     try {
       if (!this.signer) {
         console.warn("No signer configured for 0G Storage uploads, storing locally only")
@@ -80,9 +82,20 @@ class OgStorageService {
         },
       })
 
-      // Create file for 0G Storage
+      // Create temporary file for 0G Storage
+      const fs = require('fs').promises
+      const path = require('path')
+      const os = require('os')
+      
       const filename = `blacklist-${Date.now()}.json`
-      const file = new ZgFile(Buffer.from(jsonData, 'utf-8'), filename)
+      tempFilePath = path.join(os.tmpdir(), filename)
+      
+      // Write data to temporary file
+      await fs.writeFile(tempFilePath, jsonData, 'utf-8')
+      
+      // Open file handle
+      const fileHandle = await fs.open(tempFilePath, 'r')
+      const file = new ZgFile(fileHandle, filename)
 
       // Generate Merkle tree for the file
       const [tree, treeErr] = await file.merkleTree()
@@ -109,10 +122,27 @@ class OgStorageService {
       
       // Clean up file resource
       await file.close()
+      
+      // Clean up temporary file
+      try {
+        const fs = require('fs').promises
+        await fs.unlink(tempFilePath)
+      } catch (cleanupError) {
+        console.warn('Failed to cleanup temporary file:', cleanupError)
+      }
 
       return rootHash
     } catch (error) {
       console.error("Failed to upload blacklist data:", error)
+      
+      // Attempt cleanup on error
+      try {
+        const fs = require('fs').promises
+        if (tempFilePath) await fs.unlink(tempFilePath)
+      } catch (cleanupError) {
+        // Ignore cleanup errors
+      }
+      
       throw new Error("Failed to upload blacklist data to 0G Storage")
     }
   }
