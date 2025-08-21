@@ -62,6 +62,8 @@ class OgStorageService {
 
 
   async uploadBlacklistData(data: BlacklistData[]): Promise<string> {
+    let tempFilePath: string | null = null
+    
     try {
       if (!this.signer) {
         console.warn("No signer configured for 0G Storage uploads, storing locally only")
@@ -80,9 +82,21 @@ class OgStorageService {
         },
       })
 
-      // Create blob and file for 0G Storage
-      const blob = new Blob([jsonData], { type: "application/json" })
-      const file = new ZgFile(blob, blob.size)
+      // Create temporary file for 0G Storage
+      const fs = require('fs').promises
+      const path = require('path')
+      const os = require('os')
+      
+      const filename = `blacklist-${Date.now()}.json`
+      tempFilePath = path.join(os.tmpdir(), filename)
+      
+      // Write data to temporary file
+      await fs.writeFile(tempFilePath, jsonData, 'utf-8')
+      
+      // Get file size and open file handle
+      const fileStats = await fs.stat(tempFilePath)
+      const fileHandle = await fs.open(tempFilePath, 'r')
+      const file = new ZgFile(fileHandle, fileStats.size)
 
       // Generate Merkle tree for the file
       const [tree, treeErr] = await file.merkleTree()
@@ -109,10 +123,31 @@ class OgStorageService {
       
       // Clean up file resource
       await file.close()
+      
+      // Clean up temporary file
+      if (tempFilePath) {
+        try {
+          const fs = require('fs').promises
+          await fs.unlink(tempFilePath)
+        } catch (cleanupError) {
+          console.warn('Failed to cleanup temporary file:', cleanupError)
+        }
+      }
 
       return rootHash
     } catch (error) {
       console.error("Failed to upload blacklist data:", error)
+      
+      // Cleanup on error
+      if (tempFilePath) {
+        try {
+          const fs = require('fs').promises
+          await fs.unlink(tempFilePath)
+        } catch (cleanupError) {
+          // Ignore cleanup errors
+        }
+      }
+      
       throw new Error("Failed to upload blacklist data to 0G Storage")
     }
   }
