@@ -93,9 +93,13 @@ class OgStorageService {
       // Write data to temporary file
       await fs.writeFile(tempFilePath, jsonData, 'utf-8')
       
+      // Get file size
+      const fileStats = await fs.stat(tempFilePath)
+      const fileSize = fileStats.size
+      
       // Open file handle
       const fileHandle = await fs.open(tempFilePath, 'r')
-      const file = new ZgFile(fileHandle, filename)
+      const file = new ZgFile(fileHandle, fileSize)
 
       // Generate Merkle tree for the file
       const [tree, treeErr] = await file.merkleTree()
