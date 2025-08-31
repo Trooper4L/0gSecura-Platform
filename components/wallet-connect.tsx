@@ -15,13 +15,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-// 0G Galileo Testnet Configuration
+// OFFICIAL 0G Galileo Testnet Configuration
 const OG_GALILEO_TESTNET = {
-  chainId: '0x40E9', // 16601 in hex
-  chainName: '0G Galileo Testnet',
+  chainId: '0x40E9', // 16601 in hex (verified from 0G docs)
+  chainName: '0G-Galileo-Testnet',
   nativeCurrency: {
-    name: '0G Token',
-    symbol: 'OG',
+    name: 'OG',
+    symbol: 'OG', 
     decimals: 18,
   },
   rpcUrls: ['https://evmrpc-testnet.0g.ai'],

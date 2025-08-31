@@ -4,10 +4,12 @@
 backend/node_modules
 /node_modules
 backend/contracts/node_modules
-contracts/node_modules
-contracts/cache
-contracts/artifacts
-contracts/typechain-types
+contracts/node_modules/
+contracts/cache/
+contracts/artifacts/
+contracts/typechain-types/
+contracts/.env
+contracts/deployments/
 
 # next.js
 /.next/
