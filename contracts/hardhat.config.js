@@ -12,6 +12,12 @@ module.exports = {
       }
     }
   },
+  paths: {
+    sources: "./",
+    tests: "./test",
+    cache: "./cache",
+    artifacts: "./artifacts"
+  },
   networks: {
     // 0G Galileo Testnet
     "og-galileo": {

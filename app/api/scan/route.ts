@@ -3,6 +3,7 @@ import { ogBlockchain } from "@/lib/og-blockchain"
 import { phishingDetector } from "@/lib/phishing-detector"
 import { blacklistDatabase } from "@/lib/blacklist-database"
 import { ogCompute } from "@/lib/og-compute"
+import { geminiAnalyzer } from "@/lib/gemini-ai"
 import { ogStorage } from "@/lib/og-storage"
 import { withRateLimit, scanRateLimiter } from "@/lib/rate-limiter"
 import { validateScanRequest, ValidationError } from "@/lib/validators"
@@ -40,18 +41,32 @@ export const POST = withRateLimit(scanRateLimiter, async (request: NextRequest) 
         Promise.resolve(null),
       ])
 
-      // Now run AI analysis with the collected data
+      // Run AI analysis with Gemini
       let finalAiAnalysis = null
       try {
-        finalAiAnalysis = await ogCompute.analyzeTokenSecurity({
-          address,
-          tokenInfo,
-          contractAnalysis,
-          transactionPatterns,
-          liquidityAnalysis,
-          holderAnalysis,
-          honeypotAnalysis,
-        })
+        // Try Gemini AI first for enhanced analysis
+        if (geminiAnalyzer.isAvailable()) {
+          finalAiAnalysis = await geminiAnalyzer.analyzeSmartContract({
+            address,
+            tokenInfo,
+            contractAnalysis,
+            transactionPatterns,
+            liquidityAnalysis,
+            holderAnalysis,
+            honeypotAnalysis,
+          })
+        } else {
+          // Fallback to 0G Compute
+          finalAiAnalysis = await ogCompute.analyzeTokenSecurity({
+            address,
+            tokenInfo,
+            contractAnalysis,
+            transactionPatterns,
+            liquidityAnalysis,
+            holderAnalysis,
+            honeypotAnalysis,
+          })
+        }
       } catch (error) {
         console.warn("AI analysis failed:", error)
       }
@@ -114,6 +129,30 @@ export const POST = withRateLimit(scanRateLimiter, async (request: NextRequest) 
 
       let trustScore = phishingAnalysis.trustScore
       const flags = [...phishingAnalysis.flags]
+
+      // Enhanced AI analysis with Gemini
+      try {
+        if (geminiAnalyzer.isAvailable()) {
+          const geminiAnalysis = await geminiAnalyzer.analyzeWebsite({
+            url: address,
+            domainInfo: phishingAnalysis.details.domainAnalysis,
+            sslAnalysis: phishingAnalysis.details.sslAnalysis,
+            contentAnalysis: phishingAnalysis.details.contentAnalysis,
+            phishingChecks: phishingAnalysis.details.reputationAnalysis,
+          })
+
+          // Combine traditional analysis with Gemini insights
+          trustScore = Math.floor((trustScore + (100 - geminiAnalysis.riskScore)) / 2)
+          
+          // Add Gemini findings to flags
+          flags.push(`🤖 AI Confidence: ${geminiAnalysis.confidence}%`)
+          geminiAnalysis.findings.forEach(finding => {
+            flags.push(`🔍 ${finding}`)
+          })
+        }
+      } catch (error) {
+        console.warn("Gemini website analysis failed:", error)
+      }
 
       // Apply blacklist penalties
       if (blacklistMatches.length > 0) {

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { ethers } from 'ethers'
-import { Wallet, ChevronDown, LogOut, AlertCircle, CheckCircle } from 'lucide-react'
+import { Wallet, ChevronDown, LogOut, AlertCircle, CheckCircle, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -34,6 +34,8 @@ interface WalletState {
   balance: string
   chainId: string
   isCorrectNetwork: boolean
+  isAuthenticated: boolean
+  userProfile: any
 }
 
 export function WalletConnect() {
@@ -43,6 +45,8 @@ export function WalletConnect() {
     balance: '0',
     chainId: '',
     isCorrectNetwork: false,
+    isAuthenticated: false,
+    userProfile: null,
   })
   const [isConnecting, setIsConnecting] = useState(false)
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false)
@@ -109,6 +113,9 @@ export function WalletConnect() {
       if (chainId !== OG_GALILEO_TESTNET.chainId) {
         await switchToOGNetwork()
       }
+
+      // Authenticate user after wallet connection
+      await authenticateUser()
     } catch (error: any) {
       setError(error.message || 'Failed to connect wallet')
     } finally {
@@ -157,25 +164,72 @@ export function WalletConnect() {
       const balance = await provider.getBalance(address)
       const network = await provider.getNetwork()
       
-      setWallet({
+      setWallet(prev => ({
+        ...prev,
         isConnected: true,
         address,
         balance: ethers.formatEther(balance),
         chainId: '0x' + network.chainId.toString(16),
         isCorrectNetwork: '0x' + network.chainId.toString(16) === OG_GALILEO_TESTNET.chainId,
-      })
+      }))
     } catch (error) {
       console.error('Error updating wallet info:', error)
     }
   }
 
-  const disconnectWallet = () => {
+  const authenticateUser = async () => {
+    if (!wallet.isConnected || !wallet.address) return
+
+    try {
+      const message = `Sign in to 0gSecura\nAddress: ${wallet.address}\nTimestamp: ${Date.now()}\nNetwork: 0G Galileo Testnet`
+      
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const signer = await provider.getSigner()
+      const signature = await signer.signMessage(message)
+      
+      const response = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: wallet.address,
+          signature,
+          message,
+          chainId: parseInt(wallet.chainId, 16)
+        })
+      })
+
+      if (response.ok) {
+        const authData = await response.json()
+        setWallet(prev => ({
+          ...prev,
+          isAuthenticated: true,
+          userProfile: authData.user
+        }))
+      } else {
+        const error = await response.json()
+        setError(error.error || 'Authentication failed')
+      }
+    } catch (error: any) {
+      setError(error.message || 'Authentication failed')
+    }
+  }
+
+  const disconnectWallet = async () => {
+    // Sign out from backend
+    try {
+      await fetch('/api/auth/signout', { method: 'POST' })
+    } catch (error) {
+      console.warn('Sign out request failed:', error)
+    }
+
     setWallet({
       isConnected: false,
       address: '',
       balance: '0',
       chainId: '',
       isCorrectNetwork: false,
+      isAuthenticated: false,
+      userProfile: null,
     })
   }
 
@@ -297,6 +351,27 @@ export function WalletConnect() {
                 {wallet.isCorrectNetwork ? '0G Testnet' : 'Unsupported'}
               </span>
             </div>
+            <div className="flex justify-between text-sm">
+              <span>Status:</span>
+              <span className={wallet.isAuthenticated ? 'text-green-600' : 'text-orange-600'}>
+                {wallet.isAuthenticated ? 'Authenticated' : 'Not Signed In'}
+              </span>
+            </div>
+            {wallet.userProfile && (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span>Reputation:</span>
+                  <span className="font-medium">{wallet.userProfile.reputationScore}/1000</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Scans:</span>
+                  <span className="font-medium">{wallet.userProfile.totalScans}</span>
+                </div>
+                {wallet.userProfile.isPremium && (
+                  <Badge variant="default" className="text-xs">Premium User</Badge>
+                )}
+              </>
+            )}
           </div>
           
           <DropdownMenuSeparator />
@@ -305,6 +380,13 @@ export function WalletConnect() {
             <DropdownMenuItem onClick={switchToOGNetwork} disabled={isSwitchingNetwork}>
               <AlertCircle className="w-4 h-4 mr-2" />
               {isSwitchingNetwork ? 'Switching Network...' : 'Switch to 0G Testnet'}
+            </DropdownMenuItem>
+          )}
+
+          {wallet.isCorrectNetwork && !wallet.isAuthenticated && (
+            <DropdownMenuItem onClick={authenticateUser}>
+              <User className="w-4 h-4 mr-2" />
+              Sign In with Wallet
             </DropdownMenuItem>
           )}
           
