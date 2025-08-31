@@ -5,6 +5,7 @@ import { SecurityScanner } from "@/components/security-scanner"
 import { ThreatAlerts } from "@/components/threat-alerts"
 import { WalletConnect } from "@/components/wallet-connect"
 import { NetworkSetupGuide } from "@/components/network-setup-guide"
+import { NetworkTroubleshoot } from "@/components/network-troubleshoot"
 import { DebugPanel } from "@/components/debug-panel"
 import { ScanHistory } from "@/components/scan-history"
 
@@ -47,6 +48,11 @@ export default function HomePage() {
         {/* Network Setup Guide */}
         <div className="max-w-4xl mx-auto mb-12">
           <NetworkSetupGuide />
+        </div>
+
+        {/* Network Troubleshoot */}
+        <div className="max-w-4xl mx-auto mb-12">
+          <NetworkTroubleshoot />
         </div>
 
         {/* Debug Panel */}

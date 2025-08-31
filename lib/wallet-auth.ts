@@ -29,6 +29,9 @@ export const OGSECURA_AUTH_CONTRACT = {
     'function getUserProfile(address user) external view returns (tuple(bool isRegistered, uint256 registrationTimestamp, uint256 lastLoginTimestamp, uint256 totalScansPerformed, uint256 threatsReported, uint256 reputationScore, bool isPremiumUser, bytes32 profileHash))',
     'function getContractStats() external view returns (uint256 totalUsers, uint256 totalScans, uint256 totalThreats)',
     'function getNetworkInfo() external view returns (uint256 chainId, bool isOGNetwork)',
+    'function getNetworkConfiguration() external view returns (uint256 chainId, string memory networkName, string memory rpcUrl, string memory blockExplorer, string memory faucetUrl)',
+    'function validateAndEmitNetworkConfig() external',
+    'function getWalletNetworkConfig() external pure returns (string memory)',
     
     // Events
     'event UserRegistered(address indexed user, uint256 timestamp, bool isPremium)',
@@ -99,6 +102,23 @@ export class WalletAuthService {
   }
 
   /**
+   * Get network configuration from smart contract
+   */
+  async getNetworkConfigFromContract(): Promise<any> {
+    if (!this.contract) {
+      throw new Error('Contract not initialized')
+    }
+
+    try {
+      const configString = await this.contract.getWalletNetworkConfig()
+      return JSON.parse(configString)
+    } catch (error: any) {
+      console.warn('Failed to get network config from contract:', error)
+      return OG_GALILEO_TESTNET
+    }
+  }
+
+  /**
    * Check current network and prompt switch if necessary
    */
   async ensureCorrectNetwork(): Promise<boolean> {
@@ -114,8 +134,9 @@ export class WalletAuthService {
         return true
       }
 
-      // Attempt to switch networks
-      await this.switchToOGNetwork()
+      // Get network config from contract and attempt to switch
+      const contractNetworkConfig = await this.getNetworkConfigFromContract()
+      await this.switchToOGNetwork(contractNetworkConfig)
       return true
     } catch (error: any) {
       throw new Error(`Network switch failed: ${error.message}`)
@@ -123,29 +144,47 @@ export class WalletAuthService {
   }
 
   /**
-   * Switch to 0G Galileo Testnet
+   * Switch to 0G Galileo Testnet using contract configuration
    */
-  async switchToOGNetwork(): Promise<void> {
+  async switchToOGNetwork(networkConfig?: any): Promise<void> {
     if (!window.ethereum) {
       throw new Error('No Web3 provider available')
     }
+
+    const config = networkConfig || OG_GALILEO_TESTNET
 
     try {
       // Try to switch to the network
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId: OG_GALILEO_TESTNET.chainId }],
+        params: [{ chainId: config.chainId }],
       })
     } catch (switchError: any) {
       // If the network doesn't exist, add it
       if (switchError.code === 4902) {
+        console.log('Adding network with config:', config)
         await window.ethereum.request({
           method: 'wallet_addEthereumChain',
-          params: [OG_GALILEO_TESTNET],
+          params: [config],
         })
       } else {
         throw switchError
       }
+    }
+  }
+
+  /**
+   * Validate network using smart contract and emit configuration if needed
+   */
+  async validateNetworkViaContract(): Promise<void> {
+    if (!this.contract) {
+      throw new Error('Contract not initialized')
+    }
+
+    try {
+      await this.contract.validateAndEmitNetworkConfig()
+    } catch (error: any) {
+      console.warn('Contract network validation failed:', error)
     }
   }
 

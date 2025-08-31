@@ -104,11 +104,24 @@ export function WalletConnect() {
     setError('')
 
     try {
-      // First, add the 0G network if it doesn't exist
+      // First, try to add the 0G network with official configuration
       try {
+        // Use the hardcoded configuration to ensure consistency
+        const officialConfig = {
+          chainId: '0x40E9', // 16601 - OFFICIAL from 0G docs
+          chainName: '0G-Galileo-Testnet',
+          nativeCurrency: {
+            name: 'OG',
+            symbol: 'OG',
+            decimals: 18,
+          },
+          rpcUrls: ['https://evmrpc-testnet.0g.ai'],
+          blockExplorerUrls: ['https://chainscan-galileo.0g.ai'],
+        }
+        
         await window.ethereum.request({
           method: 'wallet_addEthereumChain',
-          params: [OG_GALILEO_TESTNET],
+          params: [officialConfig],
         })
       } catch (addError: any) {
         // Network might already exist, continue

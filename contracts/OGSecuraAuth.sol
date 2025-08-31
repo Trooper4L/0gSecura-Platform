@@ -8,8 +8,12 @@ pragma solidity ^0.8.19;
  */
 contract OGSecuraAuth {
     
-    // 0G Galileo Testnet Chain ID
+    // 0G Galileo Testnet Configuration
     uint256 public constant OG_GALILEO_CHAIN_ID = 16601;
+    string public constant OG_NETWORK_NAME = "0G-Galileo-Testnet";
+    string public constant OG_RPC_URL = "https://evmrpc-testnet.0g.ai";
+    string public constant OG_BLOCK_EXPLORER = "https://chainscan-galileo.0g.ai";
+    string public constant OG_FAUCET_URL = "https://faucet.0g.ai";
     
     // Contract version
     string public constant VERSION = "1.0.0";
@@ -53,6 +57,7 @@ contract OGSecuraAuth {
     event ScanPerformed(address indexed user, string scanType, uint256 timestamp);
     event ThreatReported(address indexed reporter, bytes32 indexed threatHash, uint256 timestamp);
     event ReputationUpdated(address indexed user, uint256 oldScore, uint256 newScore);
+    event NetworkConfigurationRequested(address indexed user, uint256 correctChainId, string rpcUrl);
 
     // Modifiers
     modifier onlyOwner() {
@@ -202,6 +207,53 @@ contract OGSecuraAuth {
     function getNetworkInfo() external view returns (uint256 chainId, bool isOGNetwork) {
         chainId = block.chainid;
         isOGNetwork = (chainId == OG_GALILEO_CHAIN_ID);
+    }
+
+    /**
+     * @dev Get complete network configuration for wallet setup
+     * @return chainId The required chain ID (16601)
+     * @return networkName The network name for wallet
+     * @return rpcUrl The RPC URL for wallet configuration
+     * @return blockExplorer The block explorer URL
+     * @return faucetUrl The faucet URL for getting test tokens
+     */
+    function getNetworkConfiguration() external view returns (
+        uint256 chainId,
+        string memory networkName,
+        string memory rpcUrl,
+        string memory blockExplorer,
+        string memory faucetUrl
+    ) {
+        chainId = OG_GALILEO_CHAIN_ID;
+        networkName = OG_NETWORK_NAME;
+        rpcUrl = OG_RPC_URL;
+        blockExplorer = OG_BLOCK_EXPLORER;
+        faucetUrl = OG_FAUCET_URL;
+    }
+
+    /**
+     * @dev Check if user is on correct network and emit configuration if not
+     * @dev This function can be called by frontend to get network config via events
+     */
+    function validateAndEmitNetworkConfig() external {
+        if (block.chainid != OG_GALILEO_CHAIN_ID) {
+            emit NetworkConfigurationRequested(msg.sender, OG_GALILEO_CHAIN_ID, OG_RPC_URL);
+        } else {
+            emit NetworkVerified(msg.sender, block.chainid, block.timestamp);
+        }
+    }
+
+    /**
+     * @dev Get network configuration for wallet as a structured object
+     * @return A JSON-like string with wallet configuration (for easy frontend parsing)
+     */
+    function getWalletNetworkConfig() external pure returns (string memory) {
+        return string(abi.encodePacked(
+            '{"chainId":"0x40E9","chainName":"', OG_NETWORK_NAME, 
+            '","rpcUrls":["', OG_RPC_URL, 
+            '"],"blockExplorerUrls":["', OG_BLOCK_EXPLORER, 
+            '"],"nativeCurrency":{"name":"OG","symbol":"OG","decimals":18}}'
+        ));
     }
 
     function verifyNetworkAndUpdateStatus() external onlyRegisteredUser onlyCorrectNetwork nonReentrant {
