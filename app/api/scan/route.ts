@@ -8,6 +8,59 @@ import { ogStorage } from "@/lib/og-storage"
 import { withRateLimit, scanRateLimiter } from "@/lib/rate-limiter"
 import { validateScanRequest, ValidationError } from "@/lib/validators"
 
+async function storeScanToHistory(
+  request: NextRequest, 
+  result: any, 
+  aiAnalysis: any, 
+  scanType: string, 
+  targetAddress: string
+) {
+  try {
+    // Get user address from session (if authenticated)
+    const sessionCookie = request.cookies.get('auth-session')
+    let userId = 'anonymous'
+    
+    if (sessionCookie) {
+      try {
+        const sessionData = JSON.parse(Buffer.from(sessionCookie.value, 'base64').toString())
+        userId = sessionData.address
+      } catch (error) {
+        console.warn('Failed to decode session for scan history:', error)
+      }
+    }
+
+    // Create scan history entry
+    const scanEntry = {
+      id: `scan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      userId,
+      scanType: scanType as "token" | "website",
+      targetAddress,
+      result: {
+        trustScore: result.trustScore,
+        status: result.status,
+        flags: result.flags,
+        aiAnalysis: aiAnalysis ? {
+          riskScore: aiAnalysis.riskScore,
+          confidence: aiAnalysis.confidence,
+          findings: aiAnalysis.findings,
+          summary: aiAnalysis.summary
+        } : undefined
+      },
+      timestamp: new Date().toISOString(),
+      chainId: 16601,
+      sessionId: sessionCookie?.value
+    }
+
+    // Store in 0G Storage
+    await ogStorage.storeScanHistory(userId, scanEntry)
+    
+    console.log(`✅ Scan history stored for user: ${userId.slice(0, 8)}`)
+    
+  } catch (error) {
+    console.warn("Failed to store scan history:", error)
+  }
+}
+
 export const POST = withRateLimit(scanRateLimiter, async (request: NextRequest) => {
   try {
     const requestData = await request.json()
@@ -121,6 +174,9 @@ export const POST = withRateLimit(scanRateLimiter, async (request: NextRequest) 
           blacklistMatches,
         },
       }
+
+      // Store token scan in 0G Storage
+      await storeScanToHistory(request, result, finalAiAnalysis, type, address)
     } else if (type === "website") {
       const [phishingAnalysis, blacklistMatches] = await Promise.all([
         phishingDetector.analyzeWebsite(address),
@@ -179,23 +235,12 @@ export const POST = withRateLimit(scanRateLimiter, async (request: NextRequest) 
           blacklistMatches,
         },
       }
+
+      // Store website scan in 0G Storage
+      await storeScanToHistory(request, result, null, type, address)
     }
 
-    // Store scan result in 0G Storage for analytics
-    try {
-      await ogStorage.storeSecurityReport({
-        id: `scan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: "scan_result",
-        data: result,
-        metadata: {
-          userAgent: request.headers.get("user-agent"),
-          timestamp: new Date().toISOString(),
-          scanType: type,
-        },
-      })
-    } catch (error) {
-      console.warn("Failed to store scan result:", error)
-    }
+
 
     return NextResponse.json(result)
   } catch (error) {

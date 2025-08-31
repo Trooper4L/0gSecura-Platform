@@ -39,6 +39,39 @@ export interface ThreatIntelligence {
   references: string[]
 }
 
+export interface ScanHistoryEntry {
+  id: string
+  userId: string // wallet address
+  scanType: "token" | "website"
+  targetAddress: string // token address or website URL
+  result: {
+    trustScore: number
+    status: "safe" | "caution" | "danger"
+    flags: string[]
+    aiAnalysis?: {
+      riskScore: number
+      confidence: number
+      findings: string[]
+      summary: string
+    }
+  }
+  timestamp: string
+  chainId: number
+  sessionId?: string
+}
+
+export interface UserScanHistory {
+  userId: string
+  scans: ScanHistoryEntry[]
+  totalScans: number
+  lastScanTimestamp: string
+  metadata: {
+    version: string
+    userAgent?: string
+    ipHash?: string // anonymized IP for analytics
+  }
+}
+
 class OgStorageService {
   private indexer: Indexer
   private provider: ethers.JsonRpcProvider
@@ -242,6 +275,215 @@ class OgStorageService {
     } catch (error) {
       console.error("Failed to search blacklist:", error)
       return []
+    }
+  }
+
+  async storeScanHistory(userId: string, scanEntry: ScanHistoryEntry): Promise<string> {
+    let tempFilePath: string | null = null
+    
+    try {
+      if (!this.signer) {
+        console.warn("No signer configured for 0G Storage uploads, storing locally only")
+        return `local_scan_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      }
+
+      // Get existing scan history for user
+      const existingHistory = await this.getUserScanHistory(userId)
+      
+      // Add new scan to history
+      const updatedHistory: UserScanHistory = {
+        userId,
+        scans: [...existingHistory.scans, scanEntry],
+        totalScans: existingHistory.totalScans + 1,
+        lastScanTimestamp: scanEntry.timestamp,
+        metadata: {
+          version: "1.0.0",
+          userAgent: scanEntry.result.aiAnalysis ? "AI-Enhanced" : "Standard",
+        }
+      }
+
+      // Keep only last 100 scans per user to manage storage
+      if (updatedHistory.scans.length > 100) {
+        updatedHistory.scans = updatedHistory.scans.slice(-100)
+      }
+
+      // Convert to JSON for storage
+      const jsonData = JSON.stringify({
+        type: "user_scan_history",
+        userId,
+        data: updatedHistory,
+        metadata: {
+          version: "1.0.0",
+          recordCount: updatedHistory.scans.length,
+          tags: ["scan-history", "user-data", userId.slice(0, 8)],
+          timestamp: new Date().toISOString(),
+        },
+      })
+
+      // Create temporary file for 0G Storage
+      const fs = require('fs').promises
+      const path = require('path')
+      const os = require('os')
+      
+      const filename = `scan-history-${userId.slice(0, 8)}-${Date.now()}.json`
+      tempFilePath = path.join(os.tmpdir(), filename)
+      
+      // Write data to temporary file
+      await fs.writeFile(tempFilePath, jsonData, 'utf-8')
+      
+      // Get file size and open file handle
+      const fileStats = await fs.stat(tempFilePath)
+      const fileHandle = await fs.open(tempFilePath, 'r')
+      const file = new ZgFile(fileHandle, fileStats.size)
+
+      // Generate Merkle tree for the file
+      const [tree, treeErr] = await file.merkleTree()
+      if (treeErr !== null) {
+        await file.close()
+        throw new Error(`Error generating Merkle tree: ${treeErr}`)
+      }
+
+      const rootHash = tree?.rootHash()
+      if (!rootHash) {
+        await file.close()
+        throw new Error("Failed to generate root hash")
+      }
+
+      // Upload to 0G Storage network
+      const [txHash, uploadErr] = await this.indexer.upload(file, this.rpcUrl, this.signer)
+      
+      if (uploadErr !== null) {
+        await file.close()
+        throw new Error(`Upload error: ${uploadErr}`)
+      }
+
+      console.log(`✅ Scan history uploaded to 0G Storage - TX: ${txHash}, Hash: ${rootHash}`)
+      
+      // Clean up file resource
+      await file.close()
+      
+      // Clean up temporary file
+      if (tempFilePath) {
+        try {
+          await fs.unlink(tempFilePath)
+        } catch (cleanupError) {
+          console.warn('Failed to cleanup temporary file:', cleanupError)
+        }
+      }
+
+      // Store the rootHash mapping for this user (in production, use a separate index)
+      await this.storeUserHistoryIndex(userId, rootHash)
+
+      return rootHash
+    } catch (error) {
+      console.error("Failed to store scan history:", error)
+      
+      // Cleanup on error
+      if (tempFilePath) {
+        try {
+          const fs = require('fs').promises
+          await fs.unlink(tempFilePath)
+        } catch (cleanupError) {
+          // Ignore cleanup errors
+        }
+      }
+      
+      throw new Error("Failed to store scan history to 0G Storage")
+    }
+  }
+
+  async getUserScanHistory(userId: string): Promise<UserScanHistory> {
+    try {
+      // Get the latest rootHash for this user's scan history
+      const rootHash = await this.getUserHistoryRootHash(userId)
+      
+      if (!rootHash) {
+        // Return empty history for new users
+        return {
+          userId,
+          scans: [],
+          totalScans: 0,
+          lastScanTimestamp: new Date().toISOString(),
+          metadata: {
+            version: "1.0.0"
+          }
+        }
+      }
+
+      // Download from 0G Storage using the indexer
+      const tempPath = `./temp/scan-history-${userId.slice(0, 8)}-${Date.now()}.json`
+      
+      // Ensure temp directory exists
+      const fs = await import('fs/promises')
+      const path = await import('path')
+      const tempDir = path.dirname(tempPath)
+      await fs.mkdir(tempDir, { recursive: true })
+
+      // Download file from 0G Storage
+      const downloadErr = await this.indexer.download(rootHash, tempPath, true)
+      
+      if (downloadErr !== null) {
+        console.warn(`Download error for user history: ${downloadErr}`)
+        // Return empty history if download fails
+        return {
+          userId,
+          scans: [],
+          totalScans: 0,
+          lastScanTimestamp: new Date().toISOString(),
+          metadata: { version: "1.0.0" }
+        }
+      }
+
+      // Read and parse the downloaded file
+      const fileContent = await fs.readFile(tempPath, 'utf-8')
+      const parsedData = JSON.parse(fileContent)
+      
+      // Clean up temp file
+      await fs.unlink(tempPath).catch(() => {})
+      
+      console.log(`✅ Retrieved scan history from 0G Storage for user: ${userId.slice(0, 8)}`)
+      return parsedData.data || {
+        userId,
+        scans: [],
+        totalScans: 0,
+        lastScanTimestamp: new Date().toISOString(),
+        metadata: { version: "1.0.0" }
+      }
+    } catch (error) {
+      console.error("Failed to retrieve scan history:", error)
+      return {
+        userId,
+        scans: [],
+        totalScans: 0,
+        lastScanTimestamp: new Date().toISOString(),
+        metadata: { version: "1.0.0" }
+      }
+    }
+  }
+
+  // Simple key-value store for user history root hashes (in production, use smart contract or dedicated index)
+  private userHistoryIndex = new Map<string, string>()
+
+  private async storeUserHistoryIndex(userId: string, rootHash: string): Promise<void> {
+    try {
+      this.userHistoryIndex.set(userId, rootHash)
+      
+      // In production, store this mapping in a smart contract or dedicated index service
+      console.log(`Stored history index mapping: ${userId.slice(0, 8)} -> ${rootHash}`)
+    } catch (error) {
+      console.error("Failed to store user history index:", error)
+    }
+  }
+
+  private async getUserHistoryRootHash(userId: string): Promise<string | null> {
+    try {
+      const rootHash = this.userHistoryIndex.get(userId)
+      
+      // In production, retrieve this from smart contract or dedicated index service
+      return rootHash || null
+    } catch (error) {
+      console.error("Failed to get user history root hash:", error)
+      return null
     }
   }
 

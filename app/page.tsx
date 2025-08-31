@@ -6,6 +6,7 @@ import { ThreatAlerts } from "@/components/threat-alerts"
 import { WalletConnect } from "@/components/wallet-connect"
 import { NetworkSetupGuide } from "@/components/network-setup-guide"
 import { DebugPanel } from "@/components/debug-panel"
+import { ScanHistory } from "@/components/scan-history"
 
 export default function HomePage() {
   return (
@@ -131,6 +132,11 @@ export default function HomePage() {
               </div>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Scan History */}
+        <div className="max-w-4xl mx-auto mb-12">
+          <ScanHistory />
         </div>
 
         {/* Threat Alerts */}
