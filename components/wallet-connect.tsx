@@ -104,6 +104,17 @@ export function WalletConnect() {
     setError('')
 
     try {
+      // First, add the 0G network if it doesn't exist
+      try {
+        await window.ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [OG_GALILEO_TESTNET],
+        })
+      } catch (addError: any) {
+        // Network might already exist, continue
+        console.log('Network add attempt:', addError.message)
+      }
+
       // Request account access
       await window.ethereum.request({ method: 'eth_requestAccounts' })
       await updateWalletInfo()

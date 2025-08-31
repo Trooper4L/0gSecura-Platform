@@ -5,7 +5,8 @@ class ApiClient {
   private apiKey?: string
 
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    // Use Next.js API routes (no separate backend server)
+    this.baseUrl = process.env.NEXT_PUBLIC_API_URL || ''
     this.apiKey = process.env.NEXT_PUBLIC_API_KEY
   }
 

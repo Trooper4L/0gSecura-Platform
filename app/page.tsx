@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge"
 import { SecurityScanner } from "@/components/security-scanner"
 import { ThreatAlerts } from "@/components/threat-alerts"
 import { WalletConnect } from "@/components/wallet-connect"
+import { NetworkSetupGuide } from "@/components/network-setup-guide"
+import { DebugPanel } from "@/components/debug-panel"
 
 export default function HomePage() {
   return (
@@ -39,6 +41,16 @@ export default function HomePage() {
             Detect phishing attacks, scam tokens, and malicious smart contracts before they can harm you. Get real-time
             security analysis powered by AI and blockchain intelligence.
           </p>
+        </div>
+
+        {/* Network Setup Guide */}
+        <div className="max-w-4xl mx-auto mb-12">
+          <NetworkSetupGuide />
+        </div>
+
+        {/* Debug Panel */}
+        <div className="max-w-4xl mx-auto mb-12">
+          <DebugPanel />
         </div>
 
         {/* Security Scanner */}
