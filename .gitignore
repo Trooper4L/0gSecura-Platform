@@ -3,6 +3,7 @@
 # dependencies
 backend/node_modules
 /node_modules
+backend/contracts/node_modules
 
 # next.js
 /.next/
