@@ -12,7 +12,7 @@ export function NetworkTroubleshoot() {
   const { toast } = useToast()
 
   const OFFICIAL_0G_CONFIG = {
-    chainId: '0x40E9', // 16601 in hex - VERIFIED CORRECT
+    chainId: '0x40E9', // 16601 in hex - VERIFIED CORRECT  
     chainName: '0G-Galileo-Testnet',
     nativeCurrency: {
       name: 'OG',

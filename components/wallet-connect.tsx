@@ -15,9 +15,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-// OFFICIAL 0G Galileo Testnet Configuration
+// OFFICIAL 0G Galileo Testnet Configuration (VERIFIED)
 const OG_GALILEO_TESTNET = {
-  chainId: '0x40E9', // 16601 in hex (verified from 0G docs)
+  chainId: 16601, // Use decimal for internal logic
+  chainIdHex: '0x40E9', // Hex for MetaMask
   chainName: '0G-Galileo-Testnet',
   nativeCurrency: {
     name: 'OG',
@@ -76,7 +77,7 @@ export function WalletConnect() {
     setWallet(prev => ({
       ...prev,
       chainId,
-      isCorrectNetwork: chainId === OG_GALILEO_TESTNET.chainId
+      isCorrectNetwork: chainId === OG_GALILEO_TESTNET.chainIdHex
     }))
     updateWalletInfo()
   }
@@ -106,22 +107,20 @@ export function WalletConnect() {
     try {
       // First, try to add the 0G network with official configuration
       try {
-        // Use the hardcoded configuration to ensure consistency
-        const officialConfig = {
-          chainId: '0x40E9', // 16601 - OFFICIAL from 0G docs
-          chainName: '0G-Galileo-Testnet',
-          nativeCurrency: {
-            name: 'OG',
-            symbol: 'OG',
-            decimals: 18,
-          },
-          rpcUrls: ['https://evmrpc-testnet.0g.ai'],
-          blockExplorerUrls: ['https://chainscan-galileo.0g.ai'],
+        // Use the exact configuration that matches the RPC response
+        const metaMaskConfig = {
+          chainId: OG_GALILEO_TESTNET.chainIdHex,
+          chainName: OG_GALILEO_TESTNET.chainName,
+          nativeCurrency: OG_GALILEO_TESTNET.nativeCurrency,
+          rpcUrls: OG_GALILEO_TESTNET.rpcUrls,
+          blockExplorerUrls: OG_GALILEO_TESTNET.blockExplorerUrls,
         }
+        
+        console.log('Adding network with config:', metaMaskConfig)
         
         await window.ethereum.request({
           method: 'wallet_addEthereumChain',
-          params: [officialConfig],
+          params: [metaMaskConfig],
         })
       } catch (addError: any) {
         // Network might already exist, continue
@@ -134,7 +133,9 @@ export function WalletConnect() {
       
       // Check if user needs to switch networks
       const chainId = await window.ethereum.request({ method: 'eth_chainId' })
-      if (chainId !== OG_GALILEO_TESTNET.chainId) {
+      console.log('Current chain ID:', chainId, 'Expected:', OG_GALILEO_TESTNET.chainIdHex)
+      
+      if (chainId !== OG_GALILEO_TESTNET.chainIdHex) {
         await switchToOGNetwork()
       }
 
@@ -154,18 +155,32 @@ export function WalletConnect() {
     setError('')
 
     try {
+      console.log('Attempting to switch to chain ID:', OG_GALILEO_TESTNET.chainIdHex)
+      
       // Try to switch to the network
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId: OG_GALILEO_TESTNET.chainId }],
+        params: [{ chainId: OG_GALILEO_TESTNET.chainIdHex }],
       })
     } catch (switchError: any) {
+      console.log('Switch failed, attempting to add network. Error code:', switchError.code)
+      
       // If the network doesn't exist, add it
       if (switchError.code === 4902) {
         try {
+          const addNetworkParams = {
+            chainId: OG_GALILEO_TESTNET.chainIdHex,
+            chainName: OG_GALILEO_TESTNET.chainName,
+            nativeCurrency: OG_GALILEO_TESTNET.nativeCurrency,
+            rpcUrls: OG_GALILEO_TESTNET.rpcUrls,
+            blockExplorerUrls: OG_GALILEO_TESTNET.blockExplorerUrls,
+          }
+          
+          console.log('Adding network with params:', addNetworkParams)
+          
           await window.ethereum.request({
             method: 'wallet_addEthereumChain',
-            params: [OG_GALILEO_TESTNET],
+            params: [addNetworkParams],
           })
         } catch (addError: any) {
           setError('Failed to add 0G Galileo Testnet: ' + addError.message)
@@ -188,13 +203,16 @@ export function WalletConnect() {
       const balance = await provider.getBalance(address)
       const network = await provider.getNetwork()
       
+      const currentChainIdHex = '0x' + network.chainId.toString(16)
+      console.log('Network info - Chain ID:', currentChainIdHex, 'Expected:', OG_GALILEO_TESTNET.chainIdHex)
+      
       setWallet(prev => ({
         ...prev,
         isConnected: true,
         address,
         balance: ethers.formatEther(balance),
-        chainId: '0x' + network.chainId.toString(16),
-        isCorrectNetwork: '0x' + network.chainId.toString(16) === OG_GALILEO_TESTNET.chainId,
+        chainId: currentChainIdHex,
+        isCorrectNetwork: currentChainIdHex === OG_GALILEO_TESTNET.chainIdHex,
       }))
     } catch (error) {
       console.error('Error updating wallet info:', error)
