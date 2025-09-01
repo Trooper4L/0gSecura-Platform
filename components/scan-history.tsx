@@ -51,25 +51,48 @@ interface ScanHistoryData {
 export function ScanHistory() {
   const [historyData, setHistoryData] = useState<ScanHistoryData | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const [filterType, setFilterType] = useState<string>('all')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [offset, setOffset] = useState(0)
   const { toast } = useToast()
 
+  const LIMIT = 20;
+
   useEffect(() => {
-    loadScanHistory()
+    // Reset and load from scratch when filters change
+    setOffset(0)
+    setHistoryData(null)
+    loadScanHistory(0, false)
   }, [filterType, filterStatus])
 
-  const loadScanHistory = async () => {
-    setLoading(true)
+  // Auto-refresh when page becomes visible (in case user just connected wallet)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        handleRefresh()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
+
+  const loadScanHistory = async (currentOffset = 0, isLoadMore = false) => {
+    if (isLoadMore) {
+      setLoadingMore(true)
+    } else {
+      setLoading(true)
+    }
     setError('')
 
     try {
       const params = new URLSearchParams()
       if (filterType !== 'all') params.append('type', filterType)
       if (filterStatus !== 'all') params.append('status', filterStatus)
-      params.append('limit', '50')
-
+      params.append('limit', String(LIMIT))
+      params.append('offset', String(currentOffset))
       const response = await fetch(`/api/scan-history?${params}`)
       
       if (!response.ok) {
@@ -78,13 +101,29 @@ export function ScanHistory() {
       }
 
       const data = await response.json()
-      setHistoryData(data.data)
+      if (isLoadMore) {
+        // Append new scans to the existing list
+        setHistoryData(prevData => ({
+          ...data.data,
+          scans: [...(prevData?.scans || []), ...data.data.scans],
+        }))
+      } else {
+        // Replace the data for a fresh load/filter
+        setHistoryData(data.data)
+      }
+      setOffset(currentOffset + data.data.scans.length)
     } catch (error: any) {
       setError(error.message)
       console.error('Failed to load scan history:', error)
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
+  }
+
+  const handleRefresh = () => {
+    setOffset(0)
+    loadScanHistory(0, false)
   }
 
   const deleteScan = async (scanId: string) => {
@@ -102,8 +141,9 @@ export function ScanHistory() {
         description: "Scan has been removed from your history",
       })
 
-      // Reload history
-      loadScanHistory()
+      // Reload history from the start
+      setOffset(0)
+      loadScanHistory(0, false)
     } catch (error: any) {
       toast({
         title: "Delete Failed",
@@ -112,6 +152,12 @@ export function ScanHistory() {
       })
     }
   }
+
+  const handleLoadMore = () => {
+    if (historyData?.pagination.hasMore && !loadingMore) {
+      loadScanHistory(offset, true)
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -140,14 +186,36 @@ export function ScanHistory() {
   if (error && !loading) {
     return (
       <Card className="w-full">
-        <CardContent className="pt-6">
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-          {error.includes('Authentication') && (
-            <div className="mt-4 text-center">
-              <p className="text-sm text-slate-600">Please connect your wallet to view scan history</p>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <History className="w-5 h-5" />
+            Scan History
+          </CardTitle>
+          <CardDescription>
+            Your security scans stored on 0G Storage network
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {error.includes('Authentication') || error.includes('Not authenticated') ? (
+            <div className="text-center py-8">
+              <History className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Connect Your Wallet
+              </h3>
+              <p className="text-slate-600 dark:text-slate-400 mb-4">
+                Please connect your wallet to view your scan history stored on 0G Storage
+              </p>
+              <div className="max-w-sm mx-auto p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  <strong>Your scan history is stored securely on 0G Storage</strong><br/>
+                  Once you connect your wallet, you'll see all your previous security scans and their results.
+                </p>
+              </div>
             </div>
+          ) : (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
         </CardContent>
       </Card>
@@ -168,7 +236,7 @@ export function ScanHistory() {
             </CardDescription>
           </div>
           <Button 
-            onClick={loadScanHistory} 
+            onClick={handleRefresh} 
             disabled={loading}
             variant="outline"
             size="sm"
@@ -232,16 +300,25 @@ export function ScanHistory() {
 
         {/* Scan History List */}
         <div className="space-y-4">
-          {loading ? (
+          {loading && !historyData ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
               <p className="text-sm text-slate-600 mt-2">Loading scan history from 0G Storage...</p>
             </div>
           ) : !historyData || historyData.scans.length === 0 ? (
             <div className="text-center py-8">
-              <History className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-              <p className="text-slate-600">No scan history found</p>
-              <p className="text-sm text-slate-500">Your scans will be stored on 0G Storage for future reference</p>
+              <Shield className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">
+                No Scan History Yet
+              </h3>
+              <p className="text-slate-600 dark:text-slate-400 mb-4">
+                Start scanning tokens and websites to build your security history
+              </p>
+              <div className="max-w-md mx-auto p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                <p className="text-sm text-green-700 dark:text-green-300">
+                  <strong>Powered by 0G Storage:</strong> All your scans are automatically saved to the decentralized 0G Storage network for permanent access and security.
+                </p>
+              </div>
             </div>
           ) : (
             historyData.scans.map((scan) => (
@@ -338,11 +415,8 @@ export function ScanHistory() {
         {/* Load More */}
         {historyData && historyData.pagination.hasMore && (
           <div className="text-center mt-6">
-            <Button variant="outline" onClick={() => {
-              // Implement load more functionality
-              console.log('Load more scans')
-            }}>
-              Load More Scans
+            <Button variant="outline" onClick={handleLoadMore} disabled={loadingMore}>
+              {loadingMore ? 'Loading...' : 'Load More Scans'}
             </Button>
           </div>
         )}

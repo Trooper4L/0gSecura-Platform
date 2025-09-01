@@ -9,7 +9,6 @@ export const metadata: Metadata = {
   title: "0gSecura - Blockchain Security Scanner",
   description: "Comprehensive security platform for the 0G Network ecosystem. Real-time threat detection, smart contract analysis, and community-driven blacklist management.",
   keywords: "blockchain, security, 0G Network, threat detection, smart contract, phishing protection",
-  generator: "v0.app",
 }
 
 export default function RootLayout({
