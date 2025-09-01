@@ -41,10 +41,10 @@ export async function GET() {
         chainIdDecimal: rpcData.result ? parseInt(rpcData.result, 16) : null
       },
       expectedChainId: 16601,
-      expectedChainIdHex: '0x40E9',
+      expectedChainIdHex: '0x40d9', // CORRECTED
       match: {
         ethersMatch: Number(chainId) === 16601,
-        rpcMatch: rpcData.result === '0x40E9'
+        rpcMatch: rpcData.result === '0x40d9' // CORRECTED
       }
     })
     

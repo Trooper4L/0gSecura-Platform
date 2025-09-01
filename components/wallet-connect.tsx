@@ -15,10 +15,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-// OFFICIAL 0G Galileo Testnet Configuration (VERIFIED)
+// OFFICIAL 0G Galileo Testnet Configuration (FIXED)
 const OG_GALILEO_TESTNET = {
   chainId: 16601, // Use decimal for internal logic
-  chainIdHex: '0x40E9', // Hex for MetaMask
+  chainIdHex: '0x40d9', // CORRECTED: 16601 = 0x40d9 (not 0x40E9)
   chainName: '0G-Galileo-Testnet',
   nativeCurrency: {
     name: 'OG',
