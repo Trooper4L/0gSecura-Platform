@@ -1,5 +1,4 @@
-import { createZGComputeNetworkBroker } from '@0glabs/0g-serving-broker';
-import { ethers } from 'ethers';
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 
 export interface AIAnalysisResult {
   riskScore: number;
@@ -8,90 +7,78 @@ export interface AIAnalysisResult {
   summary: string;
 }
 
-type ServingBroker = Awaited<ReturnType<typeof createZGComputeNetworkBroker>>;
-
-class OgComputeService {
-  private servingBroker: ServingBroker | null = null;
-  private initializationPromise: Promise<void>;
+class AiAnalysisService {
+  private genAI: GoogleGenerativeAI | null = null;
+  private model: any;
 
   constructor() {
-    this.initializationPromise = this.initialize();
-  }
-
-  private async initialize(): Promise<void> {
-    const privateKey = process.env.OG_PRIVATE_KEY;
-    const rpcUrl = process.env.OG_CHAIN_RPC_URL || "https://evmrpc-testnet.0g.ai";
-
-    if (!privateKey) {
-      console.warn("OG_PRIVATE_KEY is not set in .env.local. 0G Compute features will be disabled.");
-      return;
-    }
-
-    try {
-      const provider = new ethers.JsonRpcProvider(rpcUrl);
-      const wallet = new ethers.Wallet(privateKey, provider);
-      this.servingBroker = await createZGComputeNetworkBroker(wallet);
-      console.log("✅ 0G Compute Service initialized successfully.");
-    } catch (error) {
-      console.error("Failed to initialize 0G Compute Service:", error);
-      this.servingBroker = null;
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+      this.genAI = new GoogleGenerativeAI(apiKey);
+      this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    } else {
+      console.warn("GEMINI_API_KEY is not set. AI analysis features will be disabled.");
     }
   }
 
-  private getModelForType(type: string): string {
-    const modelMap: { [key: string]: string } = {
-      // You can replace these with fine-tuned model names for each task.
-      // The model name below is from the 0G Compute SDK documentation.
-      token_analysis: "succinct-community/gemma-2b-it:free",
-      phishing_detection: "succinct-community/gemma-2b-it:free",
-      pattern_recognition: "succinct-community/gemma-2b-it:free",
-    };
-    return modelMap[type] || "succinct-community/gemma-2b-it:free";
+  private generatePrompt(tokenData: any): string {
+    return `
+      Analyze the following blockchain token data for security risks and scam potential.
+      Provide your analysis in a JSON object with the following structure:
+      {
+        "riskScore": number, // A score from 0 (safe) to 100 (high risk)
+        "confidence": number, // Your confidence in the risk score, from 0 to 100
+        "summary": string, // A one-sentence summary of the findings
+        "findings": string[] // A list of specific findings (e.g., "Contract owner can mint new tokens", "High percentage of tokens held by a single address")
+      }
+
+      Token Data:
+      ${JSON.stringify(tokenData, null, 2)}
+    `;
   }
 
   async analyzeTokenSecurity(tokenData: any): Promise<AIAnalysisResult | null> {
-    await this.initializationPromise;
-
-    if (!this.servingBroker) {
-      console.warn("0G Compute Service is not available. Skipping AI analysis.");
+    if (!this.genAI) {
+      console.error("AI Analysis Service is not initialized. Check GEMINI_API_KEY.");
       return null;
     }
 
-    // The 0G Compute analysis call has been removed as requested.
-    // This will disable AI analysis via this service.
-    console.warn("0G Compute analysis has been disabled by removing the SDK call.");
-    return null;
-  }
+    try {
+      const prompt = this.generatePrompt(tokenData);
 
-  private parseAIResult(rawResult: string): AIAnalysisResult {
-    console.log("Raw AI Result:", rawResult);
-    // Attempt to parse a JSON block from the model's response
-    const jsonMatch = rawResult.match(/```json\n([\s\S]*?)\n```/);
-    if (jsonMatch && jsonMatch[1]) {
-      try {
-        const parsed = JSON.parse(jsonMatch[1]);
-        return {
-          riskScore: parsed.riskScore || 50,
-          confidence: parsed.confidence || 50,
-          findings: parsed.findings || [],
-          summary: parsed.summary || 'AI analysis completed.',
-        };
-      } catch (e) {
-        console.error("Failed to parse JSON from AI result, falling back to text parsing.", e);
-      }
+      const generationConfig = {
+        temperature: 0.2,
+        topK: 1,
+        topP: 1,
+        maxOutputTokens: 2048,
+        responseMimeType: "application/json",
+      };
+
+      const safetySettings = [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+      ];
+
+      const result = await this.model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig,
+        safetySettings,
+      });
+
+      const response = result.response;
+      const jsonText = response.text();
+      const analysis: AIAnalysisResult = JSON.parse(jsonText);
+      
+      console.log("✅ AI analysis successful:", analysis);
+      return analysis;
+
+    } catch (error) {
+      console.error("AI analysis with Gemini failed:", error);
+      return null;
     }
-
-    // Fallback for non-JSON or malformed JSON responses
-    const riskScoreMatch = rawResult.match(/Risk Score: (\d+)/i);
-    const confidenceMatch = rawResult.match(/Confidence: (\d+)/i);
-    
-    return {
-      riskScore: riskScoreMatch ? parseInt(riskScoreMatch[1], 10) : 50,
-      confidence: confidenceMatch ? parseInt(confidenceMatch[1], 10) : 50,
-      findings: [rawResult.substring(0, 250)], // Truncate for display
-      summary: rawResult.substring(0, 500),
-    };
   }
 }
 
-export const ogCompute = new OgComputeService()
+export const ogCompute = new AiAnalysisService()

@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
+  sendPasswordResetEmail,
   updateProfile,
 } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
@@ -24,6 +25,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,6 +63,21 @@ export default function LoginPage() {
     }
   }
 
+  const handlePasswordReset = async () => {
+    if (!email) {
+      setError("Please enter your email address to reset your password.");
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setMessage("Password reset email sent! Please check your inbox.");
+    } catch (err: any) {
+      setError(err.message);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     setError(null)
     const provider = new GoogleAuthProvider()
@@ -97,6 +114,12 @@ export default function LoginPage() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
+            {message && (
+              <Alert variant="default">
+                <AlertTitle>Success</AlertTitle>
+                <AlertDescription>{message}</AlertDescription>
+              </Alert>
+            )}
             {isSignUp && (
               <div className="grid gap-2">
                 <Label htmlFor="name">Name</Label>
@@ -130,6 +153,11 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              {!isSignUp && (
+                <div className="text-right text-sm">
+                  <Button type="button" variant="link" className="p-0 h-auto" onClick={handlePasswordReset}>Forgot Password?</Button>
+                </div>
+              )}
             </div>
             <Button type="submit" className="w-full">
               {isSignUp ? 'Sign Up' : 'Sign In'}
