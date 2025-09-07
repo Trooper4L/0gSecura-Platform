@@ -4,6 +4,16 @@ const nextConfig = {
   
   // Enable standalone output for Docker
   output: 'standalone',
+
+  // Image optimization configuration
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 's2.coinmarketcap.com',
+      },
+    ],
+  },
   
   // Security headers
   async headers() {

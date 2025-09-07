@@ -461,6 +461,74 @@ class OgStorageService {
     }
   }
 
+  async overwriteUserScanHistory(userId: string, history: UserScanHistory): Promise<string> {
+    let tempFilePath: string | null = null
+    
+    try {
+      if (!this.signer) {
+        console.warn("No signer configured for 0G Storage uploads, not saving history update.")
+        return `local_scan_${Date.now()}`
+      }
+
+      // Convert to JSON for storage
+      const jsonData = JSON.stringify({
+        type: "user_scan_history",
+        userId,
+        data: history,
+        metadata: {
+          version: "1.0.0",
+          recordCount: history.scans.length,
+          tags: ["scan-history", "user-data", userId.slice(0, 8)],
+          timestamp: new Date().toISOString(),
+        },
+      })
+
+      // Create temporary file for 0G Storage
+      const fs = require('fs').promises
+      const path = require('path')
+      const os = require('os')
+      
+      const filename = `scan-history-${userId.slice(0, 8)}-${Date.now()}.json`
+      tempFilePath = path.join(os.tmpdir(), filename)
+      
+      // Write data to temporary file
+      await fs.writeFile(tempFilePath, jsonData, 'utf-8')
+      
+      // Get file size and open file handle
+      const fileStats = await fs.stat(tempFilePath)
+      const fileHandle = await fs.open(tempFilePath, 'r')
+      const file = new ZgFile(fileHandle, fileStats.size)
+
+      // Generate Merkle tree for the file
+      const [tree, treeErr] = await file.merkleTree()
+      if (treeErr !== null) {
+        await file.close()
+        throw new Error(`Error generating Merkle tree: ${treeErr}`)
+      }
+
+      const rootHash = tree?.rootHash()
+      if (!rootHash) {
+        await file.close()
+        throw new Error("Failed to generate root hash")
+      }
+
+      // Upload to 0G Storage network
+      const [txHash, uploadErr] = await this.indexer.upload(file, this.rpcUrl, this.signer)
+      
+      if (uploadErr !== null) {
+        await file.close()
+        throw new Error(`Upload error: ${uploadErr}`)
+      }
+
+      await file.close()
+      await this.storeUserHistoryIndex(userId, rootHash)
+      return rootHash
+    } catch (error) {
+      console.error("Failed to overwrite scan history:", error)
+      throw new Error("Failed to overwrite scan history in 0G Storage")
+    }
+  }
+
   // Simple key-value store for user history root hashes (in production, use smart contract or dedicated index)
   private userHistoryIndex = new Map<string, string>()
 

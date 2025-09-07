@@ -12,6 +12,7 @@
     "generate-wallet": "node scripts/generate-wallet.js"
   },
   "dependencies": {
+    "@0glabs/0g-serving-broker": "^0.3.3",
     "@0glabs/0g-ts-sdk": "^0.3.0",
     "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^3.10.0",
@@ -46,10 +47,12 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
+    "crypto-js": "^4.2.0",
     "date-fns": "4.1.0",
     "dotenv": "^16.6.1",
     "embla-carousel-react": "8.5.1",
     "ethers": "6.13.1",
+    "firebase": "^12.2.1",
     "geist": "latest",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
@@ -70,6 +73,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.9",
+    "@types/crypto-js": "^4.2.2",
     "@types/node": "^22",
     "@types/pg": "^8.15.5",
     "@types/react": "^18",

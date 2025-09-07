@@ -1,186 +1,111 @@
-// 0G Compute Integration
-// Leverages 0G's decentralized GPU marketplace for AI-powered threat analysis
-
-export interface AIAnalysisRequest {
-  type: "token_analysis" | "phishing_detection" | "pattern_recognition"
-  data: any
-  modelType?: "security" | "fraud_detection" | "anomaly_detection"
-}
+import { createZGComputeNetworkBroker } from '@0glabs/0g-serving-broker';
+import { ethers } from 'ethers';
 
 export interface AIAnalysisResult {
-  confidence: number
-  riskScore: number
-  findings: string[]
-  recommendations: string[]
-  processingTime: number
-  modelUsed: string
+  riskScore: number;
+  confidence: number;
+  findings: string[];
+  summary: string;
 }
 
-export interface ComputeJobStatus {
-  jobId: string
-  status: "queued" | "running" | "completed" | "failed"
-  progress: number
-  estimatedCompletion?: string
-  result?: AIAnalysisResult
-  error?: string
-}
+type ServingBroker = Awaited<ReturnType<typeof createZGComputeNetworkBroker>>;
 
 class OgComputeService {
-  private endpoint: string
-  private apiKey: string | null
+  private servingBroker: ServingBroker | null = null;
+  private initializationPromise: Promise<void>;
 
   constructor() {
-    this.endpoint = process.env.OG_COMPUTE_ENDPOINT || "https://compute.0g.ai"
-    this.apiKey = process.env.OG_API_KEY || null
+    this.initializationPromise = this.initialize();
   }
 
-  private async makeRequest(path: string, options: RequestInit = {}) {
-    const url = `${this.endpoint}/api/v1${path}`
-    const headers = {
-      "Content-Type": "application/json",
-      ...(this.apiKey && { Authorization: `Bearer ${this.apiKey}` }),
-      ...options.headers,
+  private async initialize(): Promise<void> {
+    const privateKey = process.env.OG_PRIVATE_KEY;
+    const rpcUrl = process.env.OG_CHAIN_RPC_URL || "https://evmrpc-testnet.0g.ai";
+
+    if (!privateKey) {
+      console.warn("OG_PRIVATE_KEY is not set in .env.local. 0G Compute features will be disabled.");
+      return;
     }
 
     try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-      })
-
-      if (!response.ok) {
-        throw new Error(`0G Compute API Error: ${response.status} ${response.statusText}`)
-      }
-
-      return await response.json()
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const wallet = new ethers.Wallet(privateKey, provider);
+      this.servingBroker = await createZGComputeNetworkBroker(wallet);
+      console.log("✅ 0G Compute Service initialized successfully.");
     } catch (error) {
-      console.error("0G Compute API Error:", error)
-      throw error
+      console.error("Failed to initialize 0G Compute Service:", error);
+      this.servingBroker = null;
     }
-  }
-
-  async submitAnalysisJob(request: AIAnalysisRequest): Promise<string> {
-    try {
-      const response = await this.makeRequest("/jobs", {
-        method: "POST",
-        body: JSON.stringify({
-          jobType: "ai_security_analysis",
-          model: this.getModelForType(request.type),
-          input: request.data,
-          parameters: {
-            analysisType: request.type,
-            modelType: request.modelType || "security",
-          },
-        }),
-      })
-
-      return response.jobId
-    } catch (error) {
-      console.error("Failed to submit compute job:", error)
-      throw new Error("Failed to submit analysis job to 0G Compute")
-    }
-  }
-
-  async getJobStatus(jobId: string): Promise<ComputeJobStatus> {
-    try {
-      const response = await this.makeRequest(`/jobs/${jobId}`)
-      return {
-        jobId,
-        status: response.status,
-        progress: response.progress || 0,
-        estimatedCompletion: response.estimatedCompletion,
-        result: response.result,
-        error: response.error,
-      }
-    } catch (error) {
-      console.error("Failed to get job status:", error)
-      throw new Error("Failed to retrieve job status")
-    }
-  }
-
-  async waitForJobCompletion(jobId: string, maxWaitTime: number = 300000): Promise<AIAnalysisResult> {
-    const startTime = Date.now()
-    const pollInterval = 2000 // Poll every 2 seconds
-
-    while (Date.now() - startTime < maxWaitTime) {
-      const status = await this.getJobStatus(jobId)
-      
-      if (status.status === "completed" && status.result) {
-        return status.result
-      }
-      
-      if (status.status === "failed") {
-        throw new Error(`Analysis job failed: ${status.error || "Unknown error"}`)
-      }
-
-      await new Promise(resolve => setTimeout(resolve, pollInterval))
-    }
-
-    throw new Error("Analysis job timed out")
-  }
-
-  async analyzeTokenSecurity(tokenData: any): Promise<AIAnalysisResult> {
-    const jobId = await this.submitAnalysisJob({
-      type: "token_analysis",
-      data: tokenData,
-      modelType: "security",
-    })
-
-    return await this.waitForJobCompletion(jobId)
-  }
-
-  async detectPhishing(websiteData: any): Promise<AIAnalysisResult> {
-    const jobId = await this.submitAnalysisJob({
-      type: "phishing_detection",
-      data: websiteData,
-      modelType: "fraud_detection",
-    })
-
-    return await this.waitForJobCompletion(jobId)
-  }
-
-  async analyzeTransactionPatterns(transactionData: any): Promise<AIAnalysisResult> {
-    const jobId = await this.submitAnalysisJob({
-      type: "pattern_recognition",
-      data: transactionData,
-      modelType: "anomaly_detection",
-    })
-
-    return await this.waitForJobCompletion(jobId)
   }
 
   private getModelForType(type: string): string {
     const modelMap: { [key: string]: string } = {
-      token_analysis: "security-analyzer-v2",
-      phishing_detection: "phishing-detector-v1",
-      pattern_recognition: "anomaly-detector-v1",
-    }
-    
-    return modelMap[type] || "general-security-v1"
+      // You can replace these with fine-tuned model names for each task.
+      // The model name below is from the 0G Compute SDK documentation.
+      token_analysis: "succinct-community/gemma-2b-it:free",
+      phishing_detection: "succinct-community/gemma-2b-it:free",
+      pattern_recognition: "succinct-community/gemma-2b-it:free",
+    };
+    return modelMap[type] || "succinct-community/gemma-2b-it:free";
   }
 
-  async getAvailableModels(): Promise<string[]> {
+  async analyzeTokenSecurity(tokenData: any): Promise<AIAnalysisResult | null> {
+    await this.initializationPromise;
+
+    if (!this.servingBroker) {
+      console.warn("0G Compute Service is not available. Skipping AI analysis.");
+      return null;
+    }
+
     try {
-      const response = await this.makeRequest("/models")
-      return response.models || []
+      const model = this.getModelForType("token_analysis");
+      // The AI model expects a clear, structured prompt. We create one here.
+      const input = `Analyze the following smart contract data for security risks. Provide a risk score (0-100), confidence level (0-100), a list of findings, and a brief summary. Data: ${JSON.stringify(tokenData, null, 2)}`;
+
+      console.log(`Submitting analysis job to 0G Compute with model: ${model}`);
+      const { taskId, promise } = await this.servingBroker.run(model, input);
+      console.log(`✅ AI analysis task submitted with ID: ${taskId}`);
+
+      const result = await promise;
+      console.log(`✅ AI analysis task ${taskId} completed.`);
+
+      // The SDK result is often a string. We need to parse it into our structured format.
+      return this.parseAIResult(result);
     } catch (error) {
-      console.warn("Failed to get available models:", error)
-      return ["general-security-v1"]
+      console.error("AI analysis with 0G Compute SDK failed:", error);
+      // Return null so the app can continue without AI data.
+      return null;
     }
   }
 
-  async getComputeQuota(): Promise<{ used: number; limit: number; resetTime: string }> {
-    try {
-      const response = await this.makeRequest("/quota")
-      return {
-        used: response.used || 0,
-        limit: response.limit || 1000,
-        resetTime: response.resetTime || new Date().toISOString(),
+  private parseAIResult(rawResult: string): AIAnalysisResult {
+    console.log("Raw AI Result:", rawResult);
+    // Attempt to parse a JSON block from the model's response
+    const jsonMatch = rawResult.match(/```json\n([\s\S]*?)\n```/);
+    if (jsonMatch && jsonMatch[1]) {
+      try {
+        const parsed = JSON.parse(jsonMatch[1]);
+        return {
+          riskScore: parsed.riskScore || 50,
+          confidence: parsed.confidence || 50,
+          findings: parsed.findings || [],
+          summary: parsed.summary || 'AI analysis completed.',
+        };
+      } catch (e) {
+        console.error("Failed to parse JSON from AI result, falling back to text parsing.", e);
       }
-    } catch (error) {
-      console.warn("Failed to get compute quota:", error)
-      return { used: 0, limit: 1000, resetTime: new Date().toISOString() }
     }
+
+    // Fallback for non-JSON or malformed JSON responses
+    const riskScoreMatch = rawResult.match(/Risk Score: (\d+)/i);
+    const confidenceMatch = rawResult.match(/Confidence: (\d+)/i);
+    
+    return {
+      riskScore: riskScoreMatch ? parseInt(riskScoreMatch[1], 10) : 50,
+      confidence: confidenceMatch ? parseInt(confidenceMatch[1], 10) : 50,
+      findings: [rawResult.substring(0, 250)], // Truncate for display
+      summary: rawResult.substring(0, 500),
+    };
   }
 }
 

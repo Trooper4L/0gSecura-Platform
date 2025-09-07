@@ -120,14 +120,20 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Note: In a full implementation, you'd need to store the entire updated history
-    // For now, this is a conceptual implementation
-    console.log(`Would delete scan ${scanId} for user ${address.slice(0, 8)}`)
+    // Create the updated history object
+    const updatedHistory = {
+      ...scanHistory,
+      scans: updatedScans,
+      totalScans: scanHistory.totalScans, // Keep original total count or decrement, depends on desired logic
+    }
+
+    // Save the updated history back to 0G Storage
+    await ogStorage.overwriteUserScanHistory(address, updatedHistory)
 
     return NextResponse.json({
       success: true,
       message: 'Scan deleted successfully',
-      remainingScans: updatedScans.length
+      remainingScans: updatedScans.length,
     })
 
   } catch (error) {

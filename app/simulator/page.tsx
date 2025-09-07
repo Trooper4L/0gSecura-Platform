@@ -1,0 +1,49 @@
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
+import { Shield } from "lucide-react"
+import Link from "next/link"
+
+export default function SimulatorPage() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+      <header className="border-b bg-white/80 backdrop-blur-sm dark:bg-slate-950/80">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <Link href="/" className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 bg-teal-600 rounded-lg">
+                <Shield className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">0gSecura</h1>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Transaction Simulator</p>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-4xl font-bold text-center text-slate-900 dark:text-slate-100 mb-4">
+            See Before You Sign
+          </h2>
+          <p className="text-lg text-center text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mb-12">
+            Paste raw transaction data to get a human-readable summary of what will happen if you sign it. Avoid wallet drainers and unexpected fees.
+          </p>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>New Simulation</CardTitle>
+              <CardDescription>Enter the raw transaction data in hex format below.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Textarea placeholder="0x..." className="min-h-[150px] font-mono" />
+              <Button size="lg" className="w-full">Simulate Transaction</Button>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+    </div>
+  )
+}
