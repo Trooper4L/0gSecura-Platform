@@ -1,22 +1,32 @@
+'use client'
+
 import { ApprovalManager } from "@/components/approval-manager"
-import { Shield } from "lucide-react"
+import { AppLogo } from "@/components/app-logo"
+import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
 
 export default function ApprovalsPage() {
+  const router = useRouter()
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
       <header className="border-b bg-white/80 backdrop-blur-sm dark:bg-slate-950/80">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-3">
-              <div className="flex items-center justify-center w-10 h-10 bg-purple-600 rounded-lg">
-                <Shield className="w-6 h-6 text-white" />
+              <div className="flex items-center justify-center w-10 h-10 bg-indigo-600 rounded-lg">
+                <AppLogo />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">0gSecura</h1>
                 <p className="text-sm text-slate-600 dark:text-slate-400">DApp Approval Manager</p>
               </div>
             </Link>
+            <Button variant="outline" onClick={() => router.back()}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
           </div>
         </div>
       </header>

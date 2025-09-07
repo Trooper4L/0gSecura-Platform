@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/context/auth-context"
 import { db } from "@/lib/firebase"
 import { addDoc, collection, serverTimestamp } from "firebase/firestore"
@@ -11,11 +12,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, Shield } from "lucide-react"
+import { AppLogo } from "@/components/app-logo"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import Link from "next/link"
 
 export default function ThreatIntelPage() {
   const { user } = useAuth()
+  const router = useRouter()
   const [address, setAddress] = useState('')
   const [reason, setReason] = useState('')
   const [loading, setLoading] = useState(false)
@@ -59,13 +62,17 @@ export default function ThreatIntelPage() {
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-3">
               <div className="flex items-center justify-center w-10 h-10 bg-indigo-600 rounded-lg">
-                <Shield className="w-6 h-6 text-white" />
+                <AppLogo />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">0gSecura</h1>
                 <p className="text-sm text-slate-600 dark:text-slate-400">Community Threat Intel</p>
               </div>
             </Link>
+            <Button variant="outline" onClick={() => router.back()}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
           </div>
         </div>
       </header>

@@ -16,7 +16,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Shield } from 'lucide-react'
+import { AppLogo } from '@/components/app-logo'
+import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
 export default function LoginPage() {
@@ -91,11 +92,18 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <Button
+        variant="ghost"
+        className="absolute top-4 left-4"
+        onClick={() => router.push('/')}>
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Back to Home
+      </Button>
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <Link href="/" className="flex items-center justify-center gap-3 mb-4">
-            <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-lg">
-              <Shield className="w-6 h-6 text-white" />
+            <div className="flex items-center justify-center w-10 h-10 bg-indigo-600 rounded-lg">
+              <AppLogo />
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">0gSecura</h1>
