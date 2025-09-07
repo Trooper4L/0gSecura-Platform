@@ -57,25 +57,10 @@ class OgComputeService {
       return null;
     }
 
-    try {
-      const model = this.getModelForType("token_analysis");
-      // The AI model expects a clear, structured prompt. We create one here.
-      const input = `Analyze the following smart contract data for security risks. Provide a risk score (0-100), confidence level (0-100), a list of findings, and a brief summary. Data: ${JSON.stringify(tokenData, null, 2)}`;
-
-      console.log(`Submitting analysis job to 0G Compute with model: ${model}`);
-      const { taskId, promise } = await this.servingBroker.run(model, input);
-      console.log(`✅ AI analysis task submitted with ID: ${taskId}`);
-
-      const result = await promise;
-      console.log(`✅ AI analysis task ${taskId} completed.`);
-
-      // The SDK result is often a string. We need to parse it into our structured format.
-      return this.parseAIResult(result);
-    } catch (error) {
-      console.error("AI analysis with 0G Compute SDK failed:", error);
-      // Return null so the app can continue without AI data.
-      return null;
-    }
+    // The 0G Compute analysis call has been removed as requested.
+    // This will disable AI analysis via this service.
+    console.warn("0G Compute analysis has been disabled by removing the SDK call.");
+    return null;
   }
 
   private parseAIResult(rawResult: string): AIAnalysisResult {

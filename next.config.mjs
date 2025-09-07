@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['ethers'],
+  serverExternalPackages: ['ethers', '@0glabs/0g-serving-broker'],
   
   // Enable standalone output for Docker
   output: 'standalone',
