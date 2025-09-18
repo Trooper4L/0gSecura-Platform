@@ -3,13 +3,13 @@
 import { SecurityScanner } from "@/components/security-scanner"
 import { AppLogo } from "@/components/app-logo"
 import { ArrowLeft } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 
 export default function ScannerPage() {
   const router = useRouter()
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
       {/* Re-using a similar header structure for consistency */}
@@ -43,15 +43,8 @@ export default function ScannerPage() {
           </p>
         </div>
 
-        <div className="max-w-4xl mx-auto ">
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle>Start a New Scan</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SecurityScanner />
-            </CardContent>
-          </Card>
+        <div className="max-w-4xl mx-auto">
+          <SecurityScanner />
         </div>
       </main>
     </div>

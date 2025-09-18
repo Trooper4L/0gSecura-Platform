@@ -2,15 +2,17 @@
 
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react'
 import { onAuthStateChanged, User } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
+import { auth, app } from '@/lib/firebase'
 import { Loader2 } from 'lucide-react'
+import { FirebaseApp } from 'firebase/app'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
+  app: FirebaseApp | null
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, loading: true })
+const AuthContext = createContext<AuthContextType>({ user: null, loading: true, app: null })
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
@@ -33,7 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     )
   }
 
-  return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, loading, app }}>{children}</AuthContext.Provider>
 }
 
 export const useAuth = () => useContext(AuthContext)
