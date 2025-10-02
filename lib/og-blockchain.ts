@@ -131,7 +131,7 @@ class OgBlockchainService {
     // Initialize 0G Galileo Testnet provider
     const rpcUrl = process.env.OG_CHAIN_RPC_URL || "https://evmrpc-testnet.0g.ai"
     this.provider = new ethers.JsonRpcProvider(rpcUrl, {
-      chainId: parseInt(process.env.OG_CHAIN_ID || "16601"),
+      chainId: parseInt(process.env.OG_CHAIN_ID || "16602"),
       name: process.env.OG_NETWORK_NAME || "0G-Galileo-Testnet",
     })
   }

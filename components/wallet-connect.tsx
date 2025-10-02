@@ -17,8 +17,8 @@ import {
 
 // OFFICIAL 0G Galileo Testnet Configuration (FIXED)
 const OG_GALILEO_TESTNET = {
-  chainId: 16601, // Use decimal for internal logic
-  chainIdHex: '0x40d9', // CORRECTED: 16601 = 0x40d9 (not 0x40E9)
+  chainId: 16602, // Use decimal for internal logic
+  chainIdHex: '0x40DA', // CORRECTED: 16601 = 0x40d9 (not 0x40E9)
   chainName: '0G-Galileo-Testnet',
   nativeCurrency: {
     name: 'OG',
@@ -455,3 +455,4 @@ declare global {
     ethereum?: any
   }
 }
+

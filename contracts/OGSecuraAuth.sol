@@ -9,7 +9,7 @@ pragma solidity ^0.8.19;
 contract OGSecuraAuth {
     
     // 0G Galileo Testnet Chain ID
-    uint256 public constant OG_GALILEO_CHAIN_ID = 16601;
+    uint256 public constant OG_GALILEO_CHAIN_ID = 16602;
     
     // Contract version
     string public constant VERSION = "1.0.0";

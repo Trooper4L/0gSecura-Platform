@@ -2,8 +2,8 @@ import { ethers } from 'ethers'
 
 // OFFICIAL 0G Galileo Testnet Configuration (CORRECTED)
 export const OG_GALILEO_TESTNET = {
-  chainId: '0x40d9', // 16601 in hex (FIXED: was 0x40E9)
-  chainIdNumber: 16601,
+  chainId: '0x40DA', 
+  chainIdNumber: 16602,
   chainName: '0G-Galileo-Testnet',
   nativeCurrency: {
     name: 'OG',
