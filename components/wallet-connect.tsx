@@ -317,7 +317,7 @@ export function WalletConnect() {
             </p>
             <div className="space-y-1 text-sm text-blue-600 dark:text-blue-400">
               <p>• Network: 0G Galileo Testnet</p>
-              <p>• Chain ID: 16601</p>
+              <p>• Chain ID: 16602</p>
               <p>• RPC: evmrpc-testnet.0g.ai</p>
             </div>
           </div>
