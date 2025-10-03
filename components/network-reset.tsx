@@ -49,7 +49,7 @@ export function NetworkReset() {
     try {
       // Add network with EXACT configuration from RPC test
       const exactConfig = {
-        chainId: '0x40d9', // 16601 - CORRECTED to match RPC
+        chainId: '0x40da', // 16601 - CORRECTED to match RPC
         chainName: '0G-Galileo-Testnet',
         nativeCurrency: {
           name: 'OG',

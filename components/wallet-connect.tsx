@@ -18,7 +18,7 @@ import {
 // OFFICIAL 0G Galileo Testnet Configuration (FIXED)
 const OG_GALILEO_TESTNET = {
   chainId: 16602, // Use decimal for internal logic
-  chainIdHex: '0x40DA', // CORRECTED: 16601 = 0x40d9 (not 0x40E9)
+  chainIdHex: '0x40da', // CORRECTED: 16601 = 0x40d9 (not 0x40E9)
   chainName: '0G-Galileo-Testnet',
   nativeCurrency: {
     name: 'OG',
@@ -204,7 +204,7 @@ export function WalletConnect() {
       const network = await provider.getNetwork()
       
       const currentChainIdHex = '0x' + network.chainId.toString(16)
-      console.log('Network info - Chain ID:', currentChainIdHex, 'Expected:', OG_GALILEO_TESTNET.chainIdHex)
+      console.log('Network info - Chain ID:', currentChainIdHex.toLowerCase(), 'Expected:', OG_GALILEO_TESTNET.chainIdHex)
       
       setWallet(prev => ({
         ...prev,
@@ -212,7 +212,7 @@ export function WalletConnect() {
         address,
         balance: ethers.formatEther(balance),
         chainId: currentChainIdHex,
-        isCorrectNetwork: currentChainIdHex === OG_GALILEO_TESTNET.chainIdHex,
+        isCorrectNetwork: currentChainIdHex.toLowerCase() === OG_GALILEO_TESTNET.chainIdHex,
       }))
     } catch (error) {
       console.error('Error updating wallet info:', error)
@@ -455,4 +455,3 @@ declare global {
     ethereum?: any
   }
 }
-

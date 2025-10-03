@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast'
 export const OG_NETWORK_CONFIG = {
   networkName: '0G-Galileo-Testnet',
   rpcUrls: ['https://evmrpc-testnet.0g.ai'],
-  chainId: '0x40E9', // 16601 in decimal
+  chainId: '0x40da', // 16602 in decimal
   chainIdDecimal: 16601,
   nativeCurrency: {
     name: 'OG',
