@@ -31,9 +31,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify network (should be 0G Galileo Testnet)
-    if (chainId && chainId !== 16601) {
+    if (chainId && chainId !== 16602) {
       return NextResponse.json(
-        { error: 'Please switch to 0G Galileo Testnet (Chain ID: 16601)' },
+        { error: 'Please switch to 0G Galileo Testnet (Chain ID: 16602)' },
         { status: 400 }
       )
     }
