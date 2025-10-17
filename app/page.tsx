@@ -29,6 +29,16 @@ export default function HomePage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
+              <Link href="/scanner">
+                <Button variant="ghost" size="icon" aria-label="Scanner">
+                  <Search className="h-5 w-5" />
+                </Button>
+              </Link>
+              <Link href="/analyzer">
+                <Button variant="ghost" size="icon" aria-label="Analyzer">
+                  <FunctionSquare className="h-5 w-5" />
+                </Button>
+              </Link>
               <Link href="/settings">
                 <Button variant="ghost" size="icon" aria-label="Settings">
                   <Settings className="h-5 w-5" />
@@ -173,31 +183,31 @@ export default function HomePage() {
               <Link href="/approvals" className="w-full"><Button className="w-full">Launch Manager <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
             </CardFooter>
           </Card>
-
+          
           <Card className="transition-all hover:shadow-lg hover:-translate-y-1 flex flex-col">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <div className="p-2 bg-teal-100 dark:bg-teal-900/50 rounded-md"><FunctionSquare className="w-5 h-5 text-teal-600 dark:text-teal-400" /></div>
-                Transaction Simulator
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-md"><FunctionSquare className="w-5 h-5 text-indigo-600 dark:text-indigo-400" /></div>
+                Transaction Analyzer
               </CardTitle>
               <CardDescription>
-                Simulate transactions before signing to understand their exact outcomes and avoid scams.
+                Analyze a transaction hash to get a detailed breakdown of its purpose, risk, and legitimacy.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex-grow">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Simulations Run</span>
-                  <span className="font-semibold">98</span>
+                  <span>Transactions Analyzed</span>
+                  <span className="font-semibold">42</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>High-Risk Actions</span>
-                  <span className="font-semibold text-red-600">5</span>
+                  <span>High-Risk Detections</span>
+                  <span className="font-semibold text-red-600">3</span>
                 </div>
               </div>
             </CardContent>
             <CardFooter>
-              <Link href="/simulator" className="w-full"><Button className="w-full">Launch Simulator <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
+              <Link href="/analyzer" className="w-full"><Button className="w-full">Launch Analyzer <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
             </CardFooter>
           </Card>
 
