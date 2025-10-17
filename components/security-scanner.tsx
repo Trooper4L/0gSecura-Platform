@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
-import { apiClient } from "@/lib/api-client"
+import { analyzeContractSecurity, analyzeWebsiteSecurity } from "@/lib/0g/compute-service"
 
 interface ScanResult {
   type: "token" | "website"
@@ -77,30 +77,35 @@ export function SecurityScanner() {
     setScanProgress(0)
 
     try {
-      // Simulate progress updates
+      // Simulate progress updates while waiting for the API response
       const progressInterval = setInterval(() => {
-        setScanProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(progressInterval)
-            return 90
-          }
-          return prev + 10
-        })
+        setScanProgress((prev) => (prev >= 90 ? 90 : prev + 10))
       }, 200)
 
-      const result = activeTab === "token" 
-        ? await apiClient.scanToken(scanInput.trim())
-        : await apiClient.scanWebsite(scanInput.trim())
+      // Call the new server-side API route
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: activeTab === "token" ? "contract" : "website",
+          value: scanInput.trim(),
+        }),
+      })
 
       clearInterval(progressInterval)
       setScanProgress(100)
 
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.details || "Failed to analyze")
+      }
+
+      const result = await response.json()
       setScanResult(result)
 
-      // Show success toast
       toast({
         title: "Scan Complete",
-        description: `Security analysis completed for ${activeTab}`,
+        description: `Security analysis completed for ${activeTab}.`,
       })
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred"
