@@ -1,81 +1,117 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Loader2, ShieldAlert, ShieldX, Wallet } from 'lucide-react'
+import { Loader2, ShieldAlert, PlusCircle, Server, Wallet } from 'lucide-react'
 import Image from 'next/image'
+import { useAuth } from '@/context/auth-context'
+import { useToast } from '@/hooks/use-toast'
 
-// In a real application, this hook would be part of a larger wallet context (using Zustand, React Context, etc.)
-// that is initialized when a user connects their wallet.
-const useWallet = () => {
-  return {
-    address: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e', // Using a static address for demonstration
-    isConnected: true,
-    // This function would return a real signer object from a library like ethers.js or viem
-    getSigner: async () => {
-      alert("This is a demo. A real wallet connection is required to sign and send a transaction.")
-      return null
-    },
-  }
+// Mock data for adding a new DApp for testing
+const newMockConnection = {
+  dapp: 'PancakeSwap',
+  logo: 'https://cdn.worldvectorlogo.com/logos/pancakeswap-cake.svg',
+  category: 'DEX',
+  approvedOn: new Date().toISOString(),
+  riskLevel: 'medium',
 }
 
-interface Approval {
-  token: { address: string; name: string; symbol: string; logo: string }
-  spender: { address: string; name: string }
-  allowance: string
+interface DAppConnection {
+  dapp: string;
+  logo: string;
+  category: string;
+  approvedOn: string;
+  riskLevel: 'low' | 'medium' | 'high';
 }
 
 export function ApprovalManager() {
-  const { address, isConnected, getSigner } = useWallet()
-  const [approvals, setApprovals] = useState<Approval[]>([])
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const [connections, setConnections] = useState<DAppConnection[]>([])
   const [loading, setLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (isConnected && address) {
-      setLoading(true)
-      fetch(`/api/approvals?address=${address}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success) {
-            setApprovals(data.approvals)
-          } else {
-            setError(data.error || 'Failed to fetch approvals.')
-          }
-        })
-        .catch(() => setError('An unexpected error occurred while fetching data.'))
-        .finally(() => setLoading(false))
-    } else {
+  const walletAddress = user?.walletAddress;
+
+  const fetchConnections = useCallback(async () => {
+    if (!walletAddress) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/dapp-approvals?walletAddress=${walletAddress}`)
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || 'Failed to fetch approvals.');
+      }
+      const data = await response.json();
+      setConnections(data);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred.'
+      setError(errorMessage)
+      toast({ variant: "destructive", title: "Error", description: errorMessage })
+    } finally {
       setLoading(false)
     }
-  }, [address, isConnected])
+  }, [walletAddress, toast]);
 
-  const handleRevoke = async (tokenAddress: string, spenderAddress: string) => {
-    alert(`This would trigger a transaction to revoke approval for token ${tokenAddress} from spender ${spenderAddress}.`)
-    // Example of a real implementation with ethers.js:
-    // const signer = await getSigner();
-    // if (!signer) return;
-    // const erc20Abi = ["function approve(address spender, uint256 amount) public returns (bool)"];
-    // const tokenContract = new ethers.Contract(tokenAddress, erc20Abi, signer);
-    // try {
-    //   const tx = await tokenContract.approve(spenderAddress, 0);
-    //   await tx.wait();
-    //   // Optionally, re-fetch approvals here to update the UI
-    // } catch (e) {
-    //   console.error("Revoke failed:", e);
-    //   alert("Transaction failed or was rejected.");
-    // }
+  useEffect(() => {
+    fetchConnections();
+  }, [fetchConnections]);
+
+  const handleAddConnection = async () => {
+    if (!walletAddress) {
+      toast({ variant: "destructive", title: "Error", description: "Wallet not connected." })
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      // Get the latest list before adding to it
+      const response = await fetch(`/api/dapp-approvals?walletAddress=${walletAddress}`);
+      const currentConnections = await response.json();
+      const updatedConnections = [...currentConnections, newMockConnection];
+      
+      const postResponse = await fetch('/api/dapp-approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ walletAddress, connections: updatedConnections }),
+      });
+
+      if (!postResponse.ok) {
+        const errorData = await postResponse.json();
+        throw new Error(errorData.details || 'Failed to save data.');
+      }
+      
+      const { txHash } = await postResponse.json();
+      
+      setConnections(updatedConnections); // Optimistically update UI
+      toast({
+        title: "Success",
+        description: `New DApp connection saved to 0G Storage. Tx: ${txHash.substring(0, 10)}...`,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save data.'
+      setError(errorMessage)
+      toast({ variant: "destructive", title: "Save Failed", description: errorMessage })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  if (!isConnected) {
+  if (!walletAddress) {
     return (
       <Alert>
         <Wallet className="h-4 w-4" />
         <AlertTitle>Wallet Not Connected</AlertTitle>
-        <AlertDescription>Please connect your wallet to view and manage your token approvals.</AlertDescription>
+        <AlertDescription>Please connect your wallet to manage DApp approvals.</AlertDescription>
       </Alert>
     )
   }
@@ -88,7 +124,7 @@ export function ApprovalManager() {
     return (
       <Alert variant="destructive">
         <ShieldAlert className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
+        <AlertTitle>Error Fetching Data</AlertTitle>
         <AlertDescription>{error}</AlertDescription>
       </Alert>
     )
@@ -96,36 +132,53 @@ export function ApprovalManager() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Active Token Approvals</CardTitle>
-        <CardDescription>Showing approvals for wallet: <span className="font-mono text-sm">{address}</span></CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>DApp Approvals</CardTitle>
+          <CardDescription>
+            Showing active connections for: <span className="font-mono text-sm">{walletAddress}</span>
+          </CardDescription>
+        </div>
+        <Button onClick={handleAddConnection} disabled={isSaving}>
+          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+          {isSaving ? 'Saving...' : 'Add Test Approval'}
+        </Button>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Token</TableHead>
-              <TableHead>Spender</TableHead>
-              <TableHead>Allowance</TableHead>
-              <TableHead className="text-right">Action</TableHead>
+              <TableHead>DApp</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Risk Level</TableHead>
+              <TableHead>Approved On</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {approvals.map((approval) => (
-              <TableRow key={`${approval.token.address}-${approval.spender.address}`}>
-                <TableCell className="flex items-center gap-2 font-medium">
-                  <Image src={approval.token.logo} alt={approval.token.name} width={24} height={24} className="rounded-full" />
-                  {approval.token.name} ({approval.token.symbol})
-                </TableCell>
-                <TableCell><span className="font-mono text-xs">{approval.spender.name}</span></TableCell>
-                <TableCell>{approval.allowance.length > 30 ? 'Unlimited' : 'Limited'}</TableCell>
-                <TableCell className="text-right">
-                  <Button variant="destructive" size="sm" onClick={() => handleRevoke(approval.token.address, approval.spender.address)}>
-                    <ShieldX className="mr-2 h-4 w-4" /> Revoke
-                  </Button>
+            {connections.length > 0 ? (
+              connections.map((conn) => (
+                <TableRow key={conn.dapp}>
+                  <TableCell className="flex items-center gap-2 font-medium">
+                    <Image src={conn.logo} alt={conn.dapp} width={24} height={24} className="rounded-full bg-white" />
+                    {conn.dapp}
+                  </TableCell>
+                  <TableCell>{conn.category}</TableCell>
+                  <TableCell className={`capitalize font-semibold ${
+                    conn.riskLevel === 'high' ? 'text-red-600' :
+                    conn.riskLevel === 'medium' ? 'text-orange-600' :
+                    'text-green-600'
+                  }`}>{conn.riskLevel}</TableCell>
+                  <TableCell>{new Date(conn.approvedOn).toLocaleDateString()}</TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center">
+                  <Server className="mx-auto h-8 w-8 text-slate-400 mb-2" />
+                  No DApp approval data found on 0G Storage for this wallet.
                 </TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
       </CardContent>
