@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
-import { analyzeContractSecurity, analyzeWebsiteSecurity } from "@/lib/0g/compute-service"
 
 interface ScanResult {
   type: "token" | "website"
