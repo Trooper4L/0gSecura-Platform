@@ -2,456 +2,193 @@
 
 import React, { useState, useEffect } from 'react'
 import { ethers } from 'ethers'
-import { Wallet, ChevronDown, LogOut, AlertCircle, CheckCircle, User } from 'lucide-react'
+import { Wallet, ChevronDown, LogOut, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel, // Add the missing import here
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useAuth } from '@/context/auth-context' // Import the global auth context
+import { walletAuth, OG_GALILEO_TESTNET, UserProfile } from '@/lib/wallet-auth' // Import service and types
+import { useToast } from '@/hooks/use-toast'
 
-// OFFICIAL 0G Galileo Testnet Configuration (FIXED)
-const OG_GALILEO_TESTNET = {
-  chainId: 16602, // Use decimal for internal logic
-  chainIdHex: '0x40da', // CORRECTED: 16601 = 0x40d9 (not 0x40E9)
-  chainName: '0G-Galileo-Testnet',
-  nativeCurrency: {
-    name: 'OG',
-    symbol: 'OG', 
-    decimals: 18,
-  },
-  rpcUrls: ['https://evmrpc-testnet.0g.ai'],
-  blockExplorerUrls: ['https://chainscan-galileo.0g.ai'],
-}
-
-interface WalletState {
-  isConnected: boolean
-  address: string
-  balance: string
-  chainId: string
-  isCorrectNetwork: boolean
-  isAuthenticated: boolean
-  userProfile: any
-}
-
+// This component now manages its own UI state but updates the global auth context.
 export function WalletConnect() {
-  const [wallet, setWallet] = useState<WalletState>({
-    isConnected: false,
-    address: '',
-    balance: '0',
-    chainId: '',
-    isCorrectNetwork: false,
-    isAuthenticated: false,
-    userProfile: null,
-  })
+  const { user, setUser } = useAuth()
+  const { toast } = useToast()
+
+  const [balance, setBalance] = useState('0');
   const [isConnecting, setIsConnecting] = useState(false)
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false)
   const [error, setError] = useState('')
+  
+  // Local state to track network, derived from the provider
+  const [isCorrectNetwork, setIsCorrectNetwork] = useState(false);
 
+  // Effect to check connection on load and listen for changes
   useEffect(() => {
-    checkWalletConnection()
-    setupEventListeners()
-  }, [])
-
-  const setupEventListeners = () => {
     if (typeof window !== 'undefined' && window.ethereum) {
-      window.ethereum.on('accountsChanged', handleAccountsChanged)
-      window.ethereum.on('chainChanged', handleChainChanged)
-    }
-  }
-
-  const handleAccountsChanged = (accounts: string[]) => {
-    if (accounts.length === 0) {
-      disconnectWallet()
-    } else {
-      updateWalletInfo()
-    }
-  }
-
-  const handleChainChanged = (chainId: string) => {
-    setWallet(prev => ({
-      ...prev,
-      chainId,
-      isCorrectNetwork: chainId === OG_GALILEO_TESTNET.chainIdHex
-    }))
-    updateWalletInfo()
-  }
-
-  const checkWalletConnection = async () => {
-    if (typeof window !== 'undefined' && window.ethereum) {
-      try {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' })
-        if (accounts.length > 0) {
-          await updateWalletInfo()
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      
+      const handleAccountsChanged = (accounts: string[]) => {
+        if (accounts.length === 0) {
+          handleLogout(); // User disconnected from MetaMask
+        } else {
+          // If account changes, require re-login for security
+          setUser(null);
         }
-      } catch (error) {
-        console.error('Error checking wallet connection:', error)
-      }
+      };
+      
+      const handleChainChanged = async () => {
+        const network = await provider.getNetwork();
+        setIsCorrectNetwork(network.chainId === BigInt(OG_GALILEO_TESTNET.chainIdNumber));
+      };
+
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', handleChainChanged);
+
+      // Initial check
+      provider.getNetwork().then(network => {
+        setIsCorrectNetwork(network.chainId === BigInt(OG_GALILEO_TESTNET.chainIdNumber));
+      });
+      
+      return () => {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+      };
     }
-  }
+  }, [setUser]);
 
-  const connectWallet = async () => {
-    if (typeof window === 'undefined' || !window.ethereum) {
-      setError('Please install MetaMask or another Web3 wallet')
-      return
-    }
-
-    setIsConnecting(true)
-    setError('')
-
-    try {
-      // First, try to add the 0G network with official configuration
-      try {
-        // Use the exact configuration that matches the RPC response
-        const metaMaskConfig = {
-          chainId: OG_GALILEO_TESTNET.chainIdHex,
-          chainName: OG_GALILEO_TESTNET.chainName,
-          nativeCurrency: OG_GALILEO_TESTNET.nativeCurrency,
-          rpcUrls: OG_GALILEO_TESTNET.rpcUrls,
-          blockExplorerUrls: OG_GALILEO_TESTNET.blockExplorerUrls,
-        }
-        
-        console.log('Adding network with config:', metaMaskConfig)
-        
-        await window.ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [metaMaskConfig],
-        })
-      } catch (addError: any) {
-        // Network might already exist, continue
-        console.log('Network add attempt:', addError.message)
-      }
-
-      // Request account access
-      await window.ethereum.request({ method: 'eth_requestAccounts' })
-      await updateWalletInfo()
-      
-      // Check if user needs to switch networks
-      const chainId = await window.ethereum.request({ method: 'eth_chainId' })
-      console.log('Current chain ID:', chainId, 'Expected:', OG_GALILEO_TESTNET.chainIdHex)
-      
-      if (chainId !== OG_GALILEO_TESTNET.chainIdHex) {
-        await switchToOGNetwork()
-      }
-
-      // Authenticate user after wallet connection
-      await authenticateUser()
-    } catch (error: any) {
-      setError(error.message || 'Failed to connect wallet')
-    } finally {
-      setIsConnecting(false)
-    }
-  }
-
-  const switchToOGNetwork = async () => {
-    if (!window.ethereum) return
-
-    setIsSwitchingNetwork(true)
-    setError('')
-
-    try {
-      console.log('Attempting to switch to chain ID:', OG_GALILEO_TESTNET.chainIdHex)
-      
-      // Try to switch to the network
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: OG_GALILEO_TESTNET.chainIdHex }],
-      })
-    } catch (switchError: any) {
-      console.log('Switch failed, attempting to add network. Error code:', switchError.code)
-      
-      // If the network doesn't exist, add it
-      if (switchError.code === 4902) {
+  // Effect to fetch balance when user is authenticated
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (user?.isAuthenticated && user.walletAddress) {
         try {
-          const addNetworkParams = {
-            chainId: OG_GALILEO_TESTNET.chainIdHex,
-            chainName: OG_GALILEO_TESTNET.chainName,
-            nativeCurrency: OG_GALILEO_TESTNET.nativeCurrency,
-            rpcUrls: OG_GALILEO_TESTNET.rpcUrls,
-            blockExplorerUrls: OG_GALILEO_TESTNET.blockExplorerUrls,
-          }
-          
-          console.log('Adding network with params:', addNetworkParams)
-          
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [addNetworkParams],
-          })
-        } catch (addError: any) {
-          setError('Failed to add 0G Galileo Testnet: ' + addError.message)
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const userBalance = await provider.getBalance(user.walletAddress);
+          setBalance(ethers.formatEther(userBalance));
+        } catch (e) {
+          console.error("Failed to fetch balance:", e);
         }
-      } else {
-        setError('Failed to switch network: ' + switchError.message)
       }
-    } finally {
-      setIsSwitchingNetwork(false)
-    }
-  }
+    };
+    fetchBalance();
+  }, [user]);
 
-  const updateWalletInfo = async () => {
-    if (!window.ethereum) return
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    setError('');
+
+    if (!walletAuth.isWalletAvailable()) {
+      toast({ variant: "destructive", title: "Error", description: "MetaMask or a compatible wallet is not installed." });
+      setIsConnecting(false);
+      return;
+    }
 
     try {
-      const provider = new ethers.BrowserProvider(window.ethereum)
-      const signer = await provider.getSigner()
-      const address = await signer.getAddress()
-      const balance = await provider.getBalance(address)
-      const network = await provider.getNetwork()
-      
-      const currentChainIdHex = '0x' + network.chainId.toString(16)
-      console.log('Network info - Chain ID:', currentChainIdHex.toLowerCase(), 'Expected:', OG_GALILEO_TESTNET.chainIdHex)
-      
-      setWallet(prev => ({
-        ...prev,
-        isConnected: true,
-        address,
-        balance: ethers.formatEther(balance),
-        chainId: currentChainIdHex,
-        isCorrectNetwork: currentChainIdHex.toLowerCase() === OG_GALILEO_TESTNET.chainIdHex,
-      }))
-    } catch (error) {
-      console.error('Error updating wallet info:', error)
-    }
-  }
+      const address = await walletAuth.connectWallet();
+      await walletAuth.ensureCorrectNetwork();
 
-  const authenticateUser = async () => {
-    if (!wallet.isConnected || !wallet.address) return
+      const message = `Welcome to 0gSecura! Sign this message to authenticate.\n\nTimestamp: ${Date.now()}`;
+      const signer = await new ethers.BrowserProvider(window.ethereum).getSigner();
+      const signature = await signer.signMessage(message);
 
-    try {
-      const message = `Sign in to 0gSecura\nAddress: ${wallet.address}\nTimestamp: ${Date.now()}\nNetwork: 0G Galileo Testnet`
-      
-      const provider = new ethers.BrowserProvider(window.ethereum)
-      const signer = await provider.getSigner()
-      const signature = await signer.signMessage(message)
-      
-      const response = await fetch('/api/auth/signin', {
+      const response = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          address: wallet.address,
-          signature,
-          message,
-          chainId: parseInt(wallet.chainId, 16)
-        })
-      })
+        body: JSON.stringify({ address, signature, message }),
+      });
 
-      if (response.ok) {
-        const authData = await response.json()
-        setWallet(prev => ({
-          ...prev,
-          isAuthenticated: true,
-          userProfile: authData.user
-        }))
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.details || 'Server verification failed.');
+
+      if (data.isRegistered) {
+        setUser({ walletAddress: address, isAuthenticated: true });
+        toast({ title: "Success", description: "Wallet connected and authenticated." });
       } else {
-        const error = await response.json()
-        setError(error.error || 'Authentication failed')
+        toast({ title: "Registration Required", description: "Please confirm the transaction to register your wallet." });
+        const txHash = await walletAuth.registerUser();
+        setUser({ walletAddress: address, isAuthenticated: true });
+        toast({ title: "Registration Complete", description: `You are now registered. Tx: ${txHash.substring(0, 10)}...` });
       }
     } catch (error: any) {
-      setError(error.message || 'Authentication failed')
+      setError(error.message);
+      toast({ variant: "destructive", title: "Connection Failed", description: error.message });
+    } finally {
+      setIsConnecting(false);
     }
-  }
+  };
 
-  const disconnectWallet = async () => {
-    // Sign out from backend
+  const handleLogout = () => {
+    setUser(null);
+    toast({ title: "Disconnected", description: "Your wallet has been disconnected." });
+  };
+
+  const switchToOGNetwork = async () => {
+    setIsSwitchingNetwork(true);
     try {
-      await fetch('/api/auth/signout', { method: 'POST' })
-    } catch (error) {
-      console.warn('Sign out request failed:', error)
+      await walletAuth.switchToOGNetwork();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Network Switch Failed", description: error.message });
+    } finally {
+      setIsSwitchingNetwork(false);
     }
+  };
 
-    setWallet({
-      isConnected: false,
-      address: '',
-      balance: '0',
-      chainId: '',
-      isCorrectNetwork: false,
-      isAuthenticated: false,
-      userProfile: null,
-    })
-  }
+  const formatAddress = (address: string) => `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const formatBalance = (balance: string) => parseFloat(balance).toFixed(4);
 
-  const formatAddress = (address: string) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`
-  }
-
-  const formatBalance = (balance: string) => {
-    return parseFloat(balance).toFixed(4)
-  }
-
-  if (!wallet.isConnected) {
+  if (!user || !user.isAuthenticated || !user.walletAddress) {
     return (
-      <Card className="w-full max-w-md mx-auto">
-        <CardHeader className="text-center">
-          <CardTitle className="flex items-center justify-center gap-2">
-            <Wallet className="w-6 h-6" />
-            Connect Wallet
-          </CardTitle>
-          <CardDescription>
-            Connect your wallet to access 0gSecura security features
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {error && (
-            <Alert className="mb-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          
-          <Button 
-            onClick={connectWallet} 
-            className="w-full" 
-            disabled={isConnecting}
-          >
-            {isConnecting ? 'Connecting...' : 'Connect MetaMask'}
-          </Button>
-          
-          <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-            <p className="text-sm text-blue-700 dark:text-blue-300 font-medium mb-2">
-              Required Network:
-            </p>
-            <div className="space-y-1 text-sm text-blue-600 dark:text-blue-400">
-              <p>• Network: 0G Galileo Testnet</p>
-              <p>• Chain ID: 16602</p>
-              <p>• RPC: evmrpc-testnet.0g.ai</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <Button onClick={handleConnect} disabled={isConnecting}>
+        {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wallet className="mr-2 h-4 w-4" />}
+        Connect Wallet
+      </Button>
     )
   }
 
   return (
     <div className="flex items-center gap-4">
-      {/* Network Status */}
-      <Badge variant={wallet.isCorrectNetwork ? 'default' : 'destructive'} className="flex items-center gap-1">
-        {wallet.isCorrectNetwork ? (
-          <>
-            <CheckCircle className="w-3 h-3" />
-            0G Testnet
-          </>
-        ) : (
-          <>
-            <AlertCircle className="w-3 h-3" />
-            Wrong Network
-          </>
-        )}
+      <Badge variant={isCorrectNetwork ? 'default' : 'destructive'} className="flex items-center gap-1">
+        {isCorrectNetwork ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+        {isCorrectNetwork ? '0G Testnet' : 'Wrong Network'}
       </Badge>
 
-      {/* Network Switch Button */}
-      {!wallet.isCorrectNetwork && (
-        <Button
-          onClick={switchToOGNetwork}
-          disabled={isSwitchingNetwork}
-          size="sm"
-          variant="outline"
-        >
+      {!isCorrectNetwork && (
+        <Button onClick={switchToOGNetwork} disabled={isSwitchingNetwork} size="sm" variant="outline">
           {isSwitchingNetwork ? 'Switching...' : 'Switch to 0G'}
         </Button>
       )}
 
-      {/* Wallet Dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" className="flex items-center gap-2">
             <Wallet className="w-4 h-4" />
             <div className="text-left">
-              <div className="text-sm font-medium">
-                {formatAddress(wallet.address)}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {formatBalance(wallet.balance)} OG
-              </div>
+              <div className="text-sm font-medium">{formatAddress(user.walletAddress)}</div>
+              <div className="text-xs text-muted-foreground">{formatBalance(balance)} OG</div>
             </div>
             <ChevronDown className="w-4 h-4" />
           </Button>
         </DropdownMenuTrigger>
         
         <DropdownMenuContent align="end" className="w-64">
-          <div className="px-3 py-2">
-            <p className="text-sm font-medium">Account Details</p>
-            <p className="text-xs text-muted-foreground break-all">
-              {wallet.address}
-            </p>
-          </div>
-          
+          <DropdownMenuLabel>
+            <p className="text-sm font-medium">Account</p>
+            <p className="text-xs text-muted-foreground break-all">{user.walletAddress}</p>
+          </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          
-          <div className="px-3 py-2 space-y-1">
-            <div className="flex justify-between text-sm">
-              <span>Balance:</span>
-              <span className="font-medium">{formatBalance(wallet.balance)} OG</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Network:</span>
-              <span className={wallet.isCorrectNetwork ? 'text-green-600' : 'text-red-600'}>
-                {wallet.isCorrectNetwork ? '0G Testnet' : 'Unsupported'}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Status:</span>
-              <span className={wallet.isAuthenticated ? 'text-green-600' : 'text-orange-600'}>
-                {wallet.isAuthenticated ? 'Authenticated' : 'Not Signed In'}
-              </span>
-            </div>
-            {wallet.userProfile && (
-              <>
-                <div className="flex justify-between text-sm">
-                  <span>Reputation:</span>
-                  <span className="font-medium">{wallet.userProfile.reputationScore}/1000</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Scans:</span>
-                  <span className="font-medium">{wallet.userProfile.totalScans}</span>
-                </div>
-                {wallet.userProfile.isPremium && (
-                  <Badge variant="default" className="text-xs">Premium User</Badge>
-                )}
-              </>
-            )}
-          </div>
-          
-          <DropdownMenuSeparator />
-          
-          {!wallet.isCorrectNetwork && (
-            <DropdownMenuItem onClick={switchToOGNetwork} disabled={isSwitchingNetwork}>
-              <AlertCircle className="w-4 h-4 mr-2" />
-              {isSwitchingNetwork ? 'Switching Network...' : 'Switch to 0G Testnet'}
-            </DropdownMenuItem>
-          )}
-
-          {wallet.isCorrectNetwork && !wallet.isAuthenticated && (
-            <DropdownMenuItem onClick={authenticateUser}>
-              <User className="w-4 h-4 mr-2" />
-              Sign In with Wallet
-            </DropdownMenuItem>
-          )}
-          
-          <DropdownMenuItem onClick={disconnectWallet}>
+          <DropdownMenuItem onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" />
-            Disconnect Wallet
+            Disconnect
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      
-      {error && (
-        <Alert className="mt-2">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
     </div>
   )
-}
-
-// Global window interface extension for TypeScript
-declare global {
-  interface Window {
-    ethereum?: any
-  }
 }
