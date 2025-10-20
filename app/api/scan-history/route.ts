@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { ethers } from 'ethers';
-import { Indexer, KvClient } from '@0glabs/0g-ts-sdk';
+import { Indexer, KvClient, Batcher, getFlowContract } from '@0glabs/0g-ts-sdk';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs for each scan
 
 // --- Securely initialize the SDK on the server side ---
 const RPC_URL = process.env.OG_RPC_URL!;
 const INDEXER_RPC = process.env.INDEXER_RPC!;
 const privateKey = process.env.PRIVATE_KEY!;
+const FLOW_CONTRACT_ADDRESS = "0x56A565685C9992BF5ACafb940ff68922980DBBC5";
 
 let indexer: Indexer;
 let signer: ethers.Wallet;
@@ -22,16 +23,9 @@ if (RPC_URL && INDEXER_RPC && privateKey) {
 const SCAN_HISTORY_STREAM_ID = "0gsecura-scan-history-v2"; // Unique ID for this data stream
 
 // Helper function to get the KV client
-async function getKvClient(forWrite: boolean = false) {
-  if (!indexer) throw new Error("Storage service is not initialized on the server");
-  const nodes = await indexer.selectNodes();
-  const streamIdBytes = ethers.encodeBytes32String(SCAN_HISTORY_STREAM_ID);
-  
-  if (forWrite) {
-    if (!signer) throw new Error("Signer is not initialized for write operations");
-    return new KvClient(streamIdBytes, nodes, signer, RPC_URL);
-  }
-  return new KvClient(streamIdBytes, nodes);
+async function getKvReadClient() {
+  if (!INDEXER_RPC) throw new Error("Storage service is not initialized on the server");
+  return new KvClient(INDEXER_RPC);
 }
 
 /**
@@ -46,15 +40,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    const kvClient = await getKvClient();
+    const kvClient = await getKvReadClient();
     const keyBytes = ethers.toUtf8Bytes(walletAddress);
-    const value = await kvClient.getValue(keyBytes);
+    const streamIdBytes = ethers.encodeBytes32String(SCAN_HISTORY_STREAM_ID);
+    const value = await kvClient.getValue(streamIdBytes, keyBytes);
 
-    if (!value || value.length === 0) {
+    if (!value || !value.data) {
       return NextResponse.json({ data: { scans: [], pagination: { hasMore: false }, userStats: {} } });
     }
 
-    const jsonString = ethers.toUtf8String(value);
+    const jsonString = Buffer.from(value.data, 'base64').toString('utf-8');
     const scans = JSON.parse(jsonString);
 
     // Basic stats calculation on the server
@@ -86,14 +81,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const kvClient = await getKvClient(true);
+    const kvClient = await getKvReadClient();
     const keyBytes = ethers.toUtf8Bytes(walletAddress);
+    const streamIdBytes = ethers.encodeBytes32String(SCAN_HISTORY_STREAM_ID);
     
     let currentHistory = [];
     try {
-      const value = await kvClient.getValue(keyBytes);
-      if (value && value.length > 0) {
-        currentHistory = JSON.parse(ethers.toUtf8String(value));
+      const value = await kvClient.getValue(streamIdBytes, keyBytes);
+      if (value && value.data) {
+        currentHistory = JSON.parse(Buffer.from(value.data, 'base64').toString('utf-8'));
       }
     } catch (e) { /* Key doesn't exist, which is fine */ }
 
@@ -105,9 +101,21 @@ export async function POST(request: Request) {
     const updatedHistory = [newScan, ...currentHistory];
 
     const valueBytes = ethers.toUtf8Bytes(JSON.stringify(updatedHistory));
-    const txHash = await kvClient.putValue(keyBytes, valueBytes, { gasPrice: BigInt(10_000_000_000) });
+    
+    const [nodes, err] = await indexer.selectNodes(1);
+    if (err) {
+        throw err;
+    }
 
-    return NextResponse.json({ success: true, txHash });
+    const flowContract = getFlowContract(FLOW_CONTRACT_ADDRESS, signer);
+    const batcher = new Batcher(1, nodes, flowContract, RPC_URL);
+    batcher.streamDataBuilder.set(streamIdBytes, keyBytes, valueBytes);
+    const [tx, errExec] = await batcher.exec();
+    if (errExec) {
+        throw errExec;
+    }
+
+    return NextResponse.json({ success: true, txHash: tx });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
     return NextResponse.json({ error: "Failed to save scan history", details: errorMessage }, { status: 500 });
@@ -125,13 +133,14 @@ export async function DELETE(request: Request) {
     }
 
     try {
-        const kvClient = await getKvClient(true);
+        const kvClient = await getKvReadClient();
         const keyBytes = ethers.toUtf8Bytes(walletAddress);
+        const streamIdBytes = ethers.encodeBytes32String(SCAN_HISTORY_STREAM_ID);
 
         let currentHistory = [];
-        const value = await kvClient.getValue(keyBytes);
-        if (value && value.length > 0) {
-            currentHistory = JSON.parse(ethers.toUtf8String(value));
+        const value = await kvClient.getValue(streamIdBytes, keyBytes);
+        if (value && value.data) {
+            currentHistory = JSON.parse(Buffer.from(value.data, 'base64').toString('utf-8'));
         } else {
             return NextResponse.json({ error: "No history found for this user" }, { status: 404 });
         }
@@ -139,9 +148,21 @@ export async function DELETE(request: Request) {
         const updatedHistory = currentHistory.filter((scan: any) => scan.id !== scanId);
 
         const valueBytes = ethers.toUtf8Bytes(JSON.stringify(updatedHistory));
-        const txHash = await kvClient.putValue(keyBytes, valueBytes, { gasPrice: BigInt(10_000_000_000) });
+        
+        const [nodes, err] = await indexer.selectNodes(1);
+        if (err) {
+            throw err;
+        }
 
-        return NextResponse.json({ success: true, txHash });
+        const flowContract = getFlowContract(FLOW_CONTRACT_ADDRESS, signer);
+        const batcher = new Batcher(1, nodes, flowContract, RPC_URL);
+        batcher.streamDataBuilder.set(streamIdBytes, keyBytes, valueBytes);
+        const [tx, errExec] = await batcher.exec();
+        if (errExec) {
+            throw errExec;
+        }
+
+        return NextResponse.json({ success: true, txHash: tx });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
         return NextResponse.json({ error: "Failed to delete scan", details: errorMessage }, { status: 500 });
