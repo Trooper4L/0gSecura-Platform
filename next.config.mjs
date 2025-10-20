@@ -1,10 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['ethers', '@0glabs/0g-serving-broker'],
-  
-  // Enable standalone output for Docker
-  output: 'standalone',
-
   // Image optimization configuration
   images: {
     remotePatterns: [
@@ -40,14 +35,6 @@ const nextConfig = {
         ],
       },
     ]
-  },
-  
-  // Environment variables to expose to the client
-  env: {
-    OG_CHAIN_ID: process.env.OG_CHAIN_ID,
-    OG_NETWORK_NAME: process.env.OG_NETWORK_NAME,
-    OG_CHAIN_EXPLORER: process.env.OG_CHAIN_EXPLORER,
-    OG_STORAGE_EXPLORER: process.env.OG_STORAGE_EXPLORER,
   },
   
   // Webpack configuration for 0G SDK
