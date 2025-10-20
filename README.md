@@ -225,8 +225,6 @@ GET `/api/health` - Application health status
 This project is licensed under the MIT License.
 
 ## 🆘 Support
-
-- **Documentation**: Check the [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed setup
 - **0G Discord**: Get help from the 0G community
 - **Issues**: Report bugs via GitHub issues
 
