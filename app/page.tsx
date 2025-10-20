@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowRight, FunctionSquare, ListChecks, Search, Settings, Shield } from "lucide-react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { ThreatAlerts } from "@/components/threat-alerts"
@@ -10,8 +12,26 @@ import { AuthButton } from "@/components/auth-button"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
-export default function HomePage() {
-  const { user } = useAuth()
+export default function DashboardPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    // If not loading and no user is authenticated (neither wallet nor Firebase), redirect to login.
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+  // While loading, or if redirecting, you can show a loader or null
+  if (loading || !user) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        {/* You can use your Loader2 component here if you have one */}
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
@@ -44,8 +64,20 @@ export default function HomePage() {
                   <Settings className="h-5 w-5" />
                 </Button>
               </Link>
-              {user && <WalletConnect />}
-              <AuthButton />
+
+              {/* --- Correct Header UI --- */}
+              {/* If a Firebase user is logged in, show their avatar AND the WalletConnect button */}
+              {user.firebaseUser && (
+                <>
+                  <WalletConnect />
+                  <AuthButton />
+                </>
+              )}
+              
+              {/* If only a wallet is connected, just show the WalletConnect component */}
+              {user.isAuthenticated && user.walletAddress && !user.firebaseUser && (
+                <WalletConnect />
+              )}
             </div>
           </div>
         </div>
@@ -156,33 +188,7 @@ export default function HomePage() {
             Interactive tools to manage your assets and contribute to community safety.
           </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-          <Card className="transition-all hover:shadow-lg hover:-translate-y-1 flex flex-col">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <div className="p-2 bg-purple-100 dark:bg-purple-900/50 rounded-md"><ListChecks className="w-5 h-5 text-purple-600 dark:text-purple-400" /></div>
-                DApp Approval Manager
-              </CardTitle>
-              <CardDescription>
-                Review and revoke token approvals you've granted to decentralized applications.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex-grow">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Active Approvals</span>
-                  <span className="font-semibold">12</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Risky Permissions</span>
-                  <span className="font-semibold text-orange-600">2</span>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Link href="/approvals" className="w-full"><Button className="w-full">Launch Manager <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
-            </CardFooter>
-          </Card>
+        <div className="grid grid-cols-1 md:grid-cols-1 gap-8 mb-12">
           
           <Card className="transition-all hover:shadow-lg hover:-translate-y-1 flex flex-col">
             <CardHeader>
