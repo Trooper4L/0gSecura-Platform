@@ -25,10 +25,11 @@ export default function ThreatIntelPage() {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user) {
-      setError("You must be logged in to submit a report.")
+    // Add a guard to ensure the user is logged in with Firebase before submitting
+    if (!user || !user.firebaseUser) {
+      setError("You must be logged in with an email/Google account to submit a report.")
       return
     }
     setLoading(true)
@@ -36,11 +37,12 @@ export default function ThreatIntelPage() {
     setSuccess(false)
 
     try {
+      // Correctly access the uid and email from the nested firebaseUser object
       await addDoc(collection(db, "reports"), {
         reportedItem: address,
         reason: reason,
-        reporterUid: user.uid,
-        reporterEmail: user.email,
+        reporterUid: user.firebaseUser.uid,
+        reporterEmail: user.firebaseUser.email,
         createdAt: serverTimestamp(),
         status: 'pending',
       })
