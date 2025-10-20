@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { ethers, FeeData } from "ethers"
 import { createZGComputeNetworkBroker } from "@0glabs/0g-serving-broker"
+import { Indexer, KvClient, Batcher, getFlowContract } from '@0glabs/0g-ts-sdk';
+import { v4 as uuidv4 } from 'uuid';
 
 // --- 1. The Correct, Clean Solution for Low Gas Fees ---
 // We create a custom Ethers provider that overrides the default fee data.
@@ -19,6 +21,7 @@ class LowGasProvider extends ethers.JsonRpcProvider {
 // --- SDK Initialization ---
 const RPC_URL = process.env.OG_RPC_URL!
 const privateKey = process.env.PRIVATE_KEY!
+const FLOW_CONTRACT_ADDRESS = "0x56A565685C9992BF5ACafb940ff68922980DBBC5";
 if (!RPC_URL || !privateKey) {
   console.error("Missing 0G environment variables in .env.local")
 }
@@ -27,6 +30,19 @@ if (!RPC_URL || !privateKey) {
 const provider = new LowGasProvider(RPC_URL)
 const wallet = new ethers.Wallet(privateKey, provider)
 let broker: any
+
+const INDEXER_RPC = process.env.INDEXER_RPC!;
+let indexer: Indexer;
+if (INDEXER_RPC) {
+  indexer = new Indexer(INDEXER_RPC);
+}
+
+const SCAN_HISTORY_STREAM_ID = "0gsecura-scan-history-v2";
+
+async function getKvReadClient() {
+    if (!INDEXER_RPC) throw new Error("Storage service is not initialized on the server");
+    return new KvClient(INDEXER_RPC);
+}
 
 // --- 2. Self-Funding Ledger and Broker Initialization ---
 const initializeBroker = async () => {
@@ -99,14 +115,57 @@ async function performInference(prompt: string) {
   return parsedContent;
 }
 
+async function saveScanToHistory(walletAddress: string, scanResult: any) {
+    try {
+        const kvClient = await getKvReadClient();
+        const keyBytes = ethers.toUtf8Bytes(walletAddress);
+        const streamIdBytes = ethers.encodeBytes32String(SCAN_HISTORY_STREAM_ID);
+
+        let currentHistory = [];
+        try {
+            const value = await kvClient.getValue(streamIdBytes, keyBytes);
+            if (value && value.data) {
+                currentHistory = JSON.parse(Buffer.from(value.data, 'base64').toString('utf-8'));
+            }
+        } catch (e) { /* Key doesn't exist, which is fine */ }
+
+        const newScan = {
+            ...scanResult,
+            id: uuidv4(),
+            timestamp: new Date().toISOString(),
+        };
+        const updatedHistory = [newScan, ...currentHistory];
+
+        const valueBytes = ethers.toUtf8Bytes(JSON.stringify(updatedHistory));
+
+        const [nodes, err] = await indexer.selectNodes(1);
+        if (err) {
+            throw err;
+        }
+
+        const flowContract = getFlowContract(FLOW_CONTRACT_ADDRESS, wallet);
+        const batcher = new Batcher(1, nodes, flowContract, RPC_URL);
+        batcher.streamDataBuilder.set(streamIdBytes, keyBytes, valueBytes);
+        const [tx, errExec] = await batcher.exec();
+        if (errExec) {
+            throw errExec;
+        }
+        console.log("Scan history saved, tx:", tx);
+    } catch (error) {
+        console.error("Failed to save scan history:", error);
+        // Don't block the main response, just log the error
+    }
+}
+
 export async function POST(request: Request) {
   try {
-    const { type, value } = await request.json()
+    const { type, value, walletAddress } = await request.json()
     let prompt = ""
 
     if (!type || !value) {
       return NextResponse.json({ error: "Missing 'type' or 'value' in request body" }, { status: 400 })
     }
+
 
     // Prompts remain the same
     switch (type) {
@@ -124,6 +183,11 @@ export async function POST(request: Request) {
     }
 
     const result = await performInference(prompt)
+
+    if (walletAddress) {
+        await saveScanToHistory(walletAddress, result);
+    }
+
     return NextResponse.json(result)
   } catch (error) {
     console.error("Error in analysis API route:", error)

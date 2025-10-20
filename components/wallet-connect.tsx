@@ -1,46 +1,48 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { ethers } from 'ethers'
-import { Wallet, ChevronDown, LogOut, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import React, { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+import { Wallet, ChevronDown, LogOut, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel, // Add the missing import here
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { useAuth } from '@/context/auth-context' // Import the global auth context
-import { walletAuth, OG_GALILEO_TESTNET, UserProfile } from '@/lib/wallet-auth' // Import service and types
+} from '@/components/ui/dropdown-menu';
+import { useRouter, usePathname } from 'next/navigation' // Import navigation hooks
+import { useAuth } from '@/context/auth-context' 
+import { walletAuth, OG_GALILEO_TESTNET } from '@/lib/wallet-auth' 
 import { useToast } from '@/hooks/use-toast'
 
 // This component now manages its own UI state but updates the global auth context.
 export function WalletConnect() {
   const { user, setUser } = useAuth()
   const { toast } = useToast()
+  const router = useRouter(); // For redirecting after connection
+  const pathname = usePathname(); // To check if we are on the linking page
 
   const [balance, setBalance] = useState('0');
   const [isConnecting, setIsConnecting] = useState(false)
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false)
   const [error, setError] = useState('')
   
-  // Local state to track network, derived from the provider
   const [isCorrectNetwork, setIsCorrectNetwork] = useState(false);
 
-  // Effect to check connection on load and listen for changes
   useEffect(() => {
     if (typeof window !== 'undefined' && window.ethereum) {
       const provider = new ethers.BrowserProvider(window.ethereum);
       
       const handleAccountsChanged = (accounts: string[]) => {
         if (accounts.length === 0) {
-          handleLogout(); // User disconnected from MetaMask
-        } else {
-          // If account changes, require re-login for security
-          setUser(null);
+          handleLogout();
+        } else if (user?.walletAddress && accounts[0].toLowerCase() !== user.walletAddress.toLowerCase()) {
+          // If the connected account changes, log out to force a re-authentication
+          handleLogout();
+          toast({ title: "Account Changed", description: "You have been logged out. Please re-authenticate with the new wallet." });
         }
       };
       
@@ -52,7 +54,6 @@ export function WalletConnect() {
       window.ethereum.on('accountsChanged', handleAccountsChanged);
       window.ethereum.on('chainChanged', handleChainChanged);
 
-      // Initial check
       provider.getNetwork().then(network => {
         setIsCorrectNetwork(network.chainId === BigInt(OG_GALILEO_TESTNET.chainIdNumber));
       });
@@ -62,12 +63,11 @@ export function WalletConnect() {
         window.ethereum.removeListener('chainChanged', handleChainChanged);
       };
     }
-  }, [setUser]);
+  }, [setUser, user, toast]);
 
-  // Effect to fetch balance when user is authenticated
   useEffect(() => {
     const fetchBalance = async () => {
-      if (user?.isAuthenticated && user.walletAddress) {
+      if (user?.isAuthenticated && user.walletAddress && typeof window !== 'undefined' && window.ethereum) {
         try {
           const provider = new ethers.BrowserProvider(window.ethereum);
           const userBalance = await provider.getBalance(user.walletAddress);
@@ -94,28 +94,24 @@ export function WalletConnect() {
       const address = await walletAuth.connectWallet();
       await walletAuth.ensureCorrectNetwork();
 
-      const message = `Welcome to 0gSecura! Sign this message to authenticate.\n\nTimestamp: ${Date.now()}`;
-      const signer = await new ethers.BrowserProvider(window.ethereum).getSigner();
-      const signature = await signer.signMessage(message);
-
-      const response = await fetch('/api/auth/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, signature, message }),
+      // Update the global user state to include the new wallet address
+      setUser(prevUser => {
+        if (!prevUser?.firebaseUser) {
+          // This case is for wallet-only sign-in, which we are now preventing in the main flow
+          // but can keep for flexibility.
+          return { isAuthenticated: true, walletAddress: address };
+        }
+        // This is the main flow: link wallet to existing Firebase user
+        return { ...prevUser, walletAddress: address, isAuthenticated: true }; // Ensure isAuthenticated is true
       });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.details || 'Server verification failed.');
+      toast({ title: "Success", description: "Wallet connected successfully." });
 
-      if (data.isRegistered) {
-        setUser({ walletAddress: address, isAuthenticated: true });
-        toast({ title: "Success", description: "Wallet connected and authenticated." });
-      } else {
-        toast({ title: "Registration Required", description: "Please confirm the transaction to register your wallet." });
-        const txHash = await walletAuth.registerUser();
-        setUser({ walletAddress: address, isAuthenticated: true });
-        toast({ title: "Registration Complete", description: `You are now registered. Tx: ${txHash.substring(0, 10)}...` });
+      // If the user is on the linking page, redirect them to the dashboard
+      if (pathname === '/wallet-link') {
+        router.push('/');
       }
+      
     } catch (error: any) {
       setError(error.message);
       toast({ variant: "destructive", title: "Connection Failed", description: error.message });
@@ -125,7 +121,9 @@ export function WalletConnect() {
   };
 
   const handleLogout = () => {
-    setUser(null);
+    // A full logout should clear both wallet and firebase state.
+    // The AuthButton handles the firebase part. This just clears wallet.
+    setUser(prev => prev ? { ...prev, isAuthenticated: false, walletAddress: undefined } : null);
     toast({ title: "Disconnected", description: "Your wallet has been disconnected." });
   };
 
@@ -143,22 +141,20 @@ export function WalletConnect() {
   const formatAddress = (address: string) => `${address.slice(0, 6)}...${address.slice(-4)}`;
   const formatBalance = (balance: string) => parseFloat(balance).toFixed(4);
 
-  if (!user || !user.isAuthenticated || !user.walletAddress) {
+  // If the user has a Firebase session but no wallet, show the connect button.
+  // Also show if the user has no session at all (for flexibility, though the main flow prevents this).
+  if (!user?.walletAddress) {
     return (
       <Button onClick={handleConnect} disabled={isConnecting}>
         {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wallet className="mr-2 h-4 w-4" />}
-        Connect Wallet
+        {isConnecting ? 'Connecting...' : 'Connect Wallet'}
       </Button>
     )
   }
 
+  // User has a connected wallet
   return (
     <div className="flex items-center gap-4">
-      <Badge variant={isCorrectNetwork ? 'default' : 'destructive'} className="flex items-center gap-1">
-        {isCorrectNetwork ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-        {isCorrectNetwork ? '0G Testnet' : 'Wrong Network'}
-      </Badge>
-
       {!isCorrectNetwork && (
         <Button onClick={switchToOGNetwork} disabled={isSwitchingNetwork} size="sm" variant="outline">
           {isSwitchingNetwork ? 'Switching...' : 'Switch to 0G'}
@@ -179,13 +175,13 @@ export function WalletConnect() {
         
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuLabel>
-            <p className="text-sm font-medium">Account</p>
+            <p className="text-sm font-medium">Connected Wallet</p>
             <p className="text-xs text-muted-foreground break-all">{user.walletAddress}</p>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" />
-            Disconnect
+            Disconnect Wallet
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

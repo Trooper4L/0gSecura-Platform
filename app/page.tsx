@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowRight, FunctionSquare, ListChecks, Search, Settings, Shield } from "lucide-react"
+import { AlertTriangle, ArrowRight, FunctionSquare, ListChecks, Search, Settings, Shield, Loader2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { ThreatAlerts } from "@/components/threat-alerts"
 import { WalletConnect } from "@/components/wallet-connect"
@@ -17,18 +17,20 @@ export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // If not loading and no user is authenticated (neither wallet nor Firebase), redirect to login.
-    if (!loading && !user) {
+    // A user is fully authenticated ONLY if they have both a Firebase user and a linked wallet.
+    const isFullyAuthenticated = user && user.firebaseUser && user.walletAddress;
+
+    if (!loading && !isFullyAuthenticated) {
+      // If not fully authenticated, send them back to the start of the login flow.
       router.push('/login');
     }
   }, [user, loading, router]);
 
-  // While loading, or if redirecting, you can show a loader or null
-  if (loading || !user) {
+  // While loading or redirecting, show a loader.
+  if (loading || !user || !user.firebaseUser || !user.walletAddress) {
     return (
       <div className="flex h-screen items-center justify-center">
-        {/* You can use your Loader2 component here if you have one */}
-        <p>Loading...</p>
+        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
       </div>
     );
   }
@@ -65,19 +67,10 @@ export default function DashboardPage() {
                 </Button>
               </Link>
 
-              {/* --- Correct Header UI --- */}
-              {/* If a Firebase user is logged in, show their avatar AND the WalletConnect button */}
-              {user.firebaseUser && (
-                <>
-                  <WalletConnect />
-                  <AuthButton />
-                </>
-              )}
-              
-              {/* If only a wallet is connected, just show the WalletConnect component */}
-              {user.isAuthenticated && user.walletAddress && !user.firebaseUser && (
-                <WalletConnect />
-              )}
+              {/* --- Corrected, Final Auth UI --- */}
+              {/* Since the user must be fully authenticated to see this page, we can always show both. */}
+              <WalletConnect />
+              <AuthButton />
             </div>
           </div>
         </div>

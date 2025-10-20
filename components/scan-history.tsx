@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useToast } from '@/hooks/use-toast'
+import { useAuth } from '@/context/auth-context'
 
 interface ScanHistoryEntry {
   id: string
@@ -49,8 +50,9 @@ interface ScanHistoryData {
 }
 
 export function ScanHistory() {
+  const { user } = useAuth() // Get the authenticated user
   const [historyData, setHistoryData] = useState<ScanHistoryData | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true) // Default to true to handle initial load
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
   const [filterType, setFilterType] = useState<string>('all')
@@ -61,11 +63,17 @@ export function ScanHistory() {
   const LIMIT = 20;
 
   useEffect(() => {
-    // Reset and load from scratch when filters change
-    setOffset(0)
-    setHistoryData(null)
-    loadScanHistory(0, false)
-  }, [filterType, filterStatus])
+    // Only fetch data if the user is authenticated
+    if (user?.walletAddress) {
+      setOffset(0)
+      setHistoryData(null)
+      loadScanHistory(0, false)
+    } else {
+      // If there's no user, stop loading and clear data
+      setLoading(false)
+      setHistoryData(null)
+    }
+  }, [filterType, filterStatus, user]) // Re-run when filters or user change
 
   // Auto-refresh when page becomes visible (in case user just connected wallet)
   useEffect(() => {
@@ -80,6 +88,13 @@ export function ScanHistory() {
   }, [])
 
   const loadScanHistory = async (currentOffset = 0, isLoadMore = false) => {
+    const walletAddress = user?.walletAddress;
+    // Guard clause: Do not fetch if there is no wallet address
+    if (!walletAddress) {
+      setLoading(false);
+      return;
+    }
+
     if (isLoadMore) {
       setLoadingMore(true)
     } else {
@@ -89,6 +104,7 @@ export function ScanHistory() {
 
     try {
       const params = new URLSearchParams()
+      params.append('walletAddress', walletAddress); // Add wallet address to the request
       if (filterType !== 'all') params.append('type', filterType)
       if (filterStatus !== 'all') params.append('status', filterStatus)
       params.append('limit', String(LIMIT))
@@ -127,9 +143,22 @@ export function ScanHistory() {
   }
 
   const deleteScan = async (scanId: string) => {
+    const walletAddress = user?.walletAddress;
+    if (!walletAddress) {
+      toast({
+        title: "Authentication Error",
+        description: "Please connect your wallet to perform this action.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/scan-history?id=${scanId}`, {
-        method: 'DELETE'
+      // Pass walletAddress in the body for backend verification
+      const response = await fetch(`/api/scan-history`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scanId, walletAddress }),
       })
 
       if (!response.ok) {
@@ -183,7 +212,7 @@ export function ScanHistory() {
     return `${address.slice(0, 6)}...${address.slice(-4)}`
   }
 
-  if (error && !loading) {
+  if (!user?.walletAddress && !loading) {
     return (
       <Card className="w-full">
         <CardHeader>
@@ -196,30 +225,18 @@ export function ScanHistory() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {error.includes('Authentication') || error.includes('Not authenticated') ? (
-            <div className="text-center py-8">
-              <History className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Connect Your Wallet
-              </h3>
-              <p className="text-slate-600 dark:text-slate-400 mb-4">
-                Please connect your wallet to view your scan history stored on 0G Storage
-              </p>
-              <div className="max-w-sm mx-auto p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                <p className="text-sm text-blue-700 dark:text-blue-300">
-                  <strong>Your scan history is stored securely on 0G Storage</strong><br/>
-                  Once you connect your wallet, you'll see all your previous security scans and their results.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+          <div className="text-center py-8">
+            <History className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Connect Your Wallet
+            </h3>
+            <p className="text-slate-600 dark:text-slate-400 mb-4">
+              Please connect your wallet to view your scan history.
+            </p>
+          </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (

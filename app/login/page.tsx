@@ -33,13 +33,13 @@ export default function LoginPage() {
     e.preventDefault()
     setError(null)
     try {
-      if (isSignUp) {
+            if (isSignUp) {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password)
         await updateProfile(userCredential.user, { displayName: name })
       } else {
         await signInWithEmailAndPassword(auth, email, password)
       }
-      router.push('/')
+      router.push('/wallet-link'); // Redirect to wallet linking instead of the main page
     } catch (err: any) {
       let friendlyMessage = 'An unexpected error occurred.'
       switch (err.code) {
@@ -79,12 +79,12 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+    const handleGoogleSignIn = async () => {
     setError(null)
     const provider = new GoogleAuthProvider()
     try {
       await signInWithPopup(auth, provider)
-      router.push('/')
+      router.push('/wallet-link'); // Redirect to wallet linking
     } catch (err: any) {
       setError(err.message)
     }
