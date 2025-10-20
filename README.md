@@ -144,13 +144,8 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
 - Function analysis (mint, burn, pause)
 - Tax mechanism detection
 - Proxy pattern detection
-
-### Connected Dapps Feature
-- Allows users to view information about Dapps they've previously connceted to.
-- Provides AI insights using 0g compute about such Dapps.
-- It stores their connected Dapps to the 0g storage on the 0g blockchain.
   
-## Transaction Analyzer
+## Transaction Analyzer and Simulator
 - A user is able to analyze a transaction hash before approval in a wallet
 - The analyzer can make use of the AI models available on 0g compute or Gemini's Flash 1.5.
 
@@ -214,8 +209,6 @@ GET `/api/health` - Application health status
 - Week 2: Working Demo deliverable with 0g features implemented (0g chain, 0g storage).
 - Week 3: UI/UX improvement of the Platform (user signup/signin integrated), additional features integrated (Transaction Analyzer, Connected Dapps feature) with mock data for testing.
 - Week 4: Community reporting of maliciious websites and tokens beta testing with 0g storage.
-- Transaction Analyzer beta testing with 0g compute
-- Connected Dapps Feature beta testing with 0g compute and 0g storage.
 - Week 5: Complete testing and working deliverable of all features
 - Week 6: Platform improvements.
 
