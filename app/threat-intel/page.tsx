@@ -38,6 +38,9 @@ export default function ThreatIntelPage() {
 
     try {
       // Correctly access the uid and email from the nested firebaseUser object
+      if (!db) {
+        throw new Error('Database not initialized')
+      }
       await addDoc(collection(db, "reports"), {
         reportedItem: address,
         reason: reason,
