@@ -1,9 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['ethers', '@0glabs/0g-serving-broker'],
+  serverExternalPackages: ['ethers', '@0glabs/0g-serving-broker', '@0glabs/0g-ts-sdk'],
   
-  // Enable standalone output for Docker
-  output: 'standalone',
+  // Remove standalone output for Vercel deployment
+  // output: 'standalone',
 
   // Image optimization configuration
   images: {
@@ -59,11 +59,25 @@ const nextConfig = {
         fs: false,
         path: false,
         crypto: false,
+        net: false,
+        tls: false,
+        dns: false,
       }
+    }
+    
+    // Ignore node-specific modules
+    config.externals = config.externals || []
+    if (isServer) {
+      config.externals.push({
+        'encoding': 'commonjs encoding'
+      })
     }
     
     return config
   },
+  
+  // Transpile Firebase packages properly
+  transpilePackages: ['firebase', '@firebase/app', '@firebase/auth', '@firebase/firestore'],
 }
 
 export default nextConfig
