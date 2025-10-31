@@ -35,6 +35,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     // This listener handles Firebase's auth state (e.g., for email/password or social logins)
+    if (!auth) {
+      setLoading(false)
+      return
+    }
+    
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         // If a Firebase user is found, we set a unified user object
