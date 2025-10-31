@@ -22,6 +22,7 @@ export function AuthButton() {
   const { toast } = useToast()
 
   const handleLogout = async () => {
+    if (!auth) return;
     await signOut(auth);
     setUser(null); // Clear the user from the global state
     toast({ title: "Logged Out", description: "You have been successfully logged out." });
