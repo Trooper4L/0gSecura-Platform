@@ -145,7 +145,8 @@ class OgStorageService {
       }
 
       // Upload to 0G Storage network
-      const [txHash, uploadErr] = await this.indexer.upload(file, this.rpcUrl, this.signer)
+      // Type assertion needed due to ethers ESM/CommonJS module resolution conflict
+      const [txHash, uploadErr] = await this.indexer.upload(file, this.rpcUrl, this.signer as any)
       
       if (uploadErr !== null) {
         await file.close()
@@ -350,7 +351,8 @@ class OgStorageService {
       }
 
       // Upload to 0G Storage network
-      const [txHash, uploadErr] = await this.indexer.upload(file, this.rpcUrl, this.signer)
+      // Type assertion needed due to ethers ESM/CommonJS module resolution conflict
+      const [txHash, uploadErr] = await this.indexer.upload(file, this.rpcUrl, this.signer as any)
       
       if (uploadErr !== null) {
         await file.close()
@@ -513,7 +515,8 @@ class OgStorageService {
       }
 
       // Upload to 0G Storage network
-      const [txHash, uploadErr] = await this.indexer.upload(file, this.rpcUrl, this.signer)
+      // Type assertion needed due to ethers ESM/CommonJS module resolution conflict
+      const [txHash, uploadErr] = await this.indexer.upload(file, this.rpcUrl, this.signer as any)
       
       if (uploadErr !== null) {
         await file.close()

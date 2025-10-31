@@ -143,7 +143,8 @@ async function saveScanToHistory(walletAddress: string, scanResult: any) {
             throw err;
         }
 
-        const flowContract = getFlowContract(FLOW_CONTRACT_ADDRESS, wallet);
+        // Type assertion needed due to ethers ESM/CommonJS module resolution conflict
+        const flowContract = getFlowContract(FLOW_CONTRACT_ADDRESS, wallet as any);
         const batcher = new Batcher(1, nodes, flowContract, RPC_URL);
         batcher.streamDataBuilder.set(streamIdBytes, keyBytes, valueBytes);
         const [tx, errExec] = await batcher.exec();

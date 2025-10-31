@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   // --- 3. Provide the new user state and setUser function to the app ---
-  return <AuthContext.Provider value={{ user, setUser, loading, app }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, setUser, loading, app: app || null }}>{children}</AuthContext.Provider>
 }
 
 export const useAuth = () => {

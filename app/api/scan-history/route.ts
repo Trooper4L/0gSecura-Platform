@@ -107,7 +107,8 @@ export async function POST(request: Request) {
         throw err;
     }
 
-    const flowContract = getFlowContract(FLOW_CONTRACT_ADDRESS, signer);
+    // Type assertion needed due to ethers ESM/CommonJS module resolution conflict
+    const flowContract = getFlowContract(FLOW_CONTRACT_ADDRESS, signer as any);
     const batcher = new Batcher(1, nodes, flowContract, RPC_URL);
     batcher.streamDataBuilder.set(streamIdBytes, keyBytes, valueBytes);
     const [tx, errExec] = await batcher.exec();
@@ -154,7 +155,8 @@ export async function DELETE(request: Request) {
             throw err;
         }
 
-        const flowContract = getFlowContract(FLOW_CONTRACT_ADDRESS, signer);
+        // Type assertion needed due to ethers ESM/CommonJS module resolution conflict
+        const flowContract = getFlowContract(FLOW_CONTRACT_ADDRESS, signer as any);
         const batcher = new Batcher(1, nodes, flowContract, RPC_URL);
         batcher.streamDataBuilder.set(streamIdBytes, keyBytes, valueBytes);
         const [tx, errExec] = await batcher.exec();
