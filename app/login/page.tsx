@@ -32,8 +32,12 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    if (!auth) {
+      setError('Authentication service not available')
+      return
+    }
     try {
-            if (isSignUp) {
+      if (isSignUp) {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password)
         await updateProfile(userCredential.user, { displayName: name })
       } else {
@@ -69,6 +73,10 @@ export default function LoginPage() {
       setError("Please enter your email address to reset your password.");
       return;
     }
+    if (!auth) {
+      setError('Authentication service not available');
+      return;
+    }
     setError(null);
     setMessage(null);
     try {
@@ -79,8 +87,12 @@ export default function LoginPage() {
     }
   };
 
-    const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = async () => {
     setError(null)
+    if (!auth) {
+      setError('Authentication service not available')
+      return
+    }
     const provider = new GoogleAuthProvider()
     try {
       await signInWithPopup(auth, provider)
