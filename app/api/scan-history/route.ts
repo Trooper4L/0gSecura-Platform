@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs for each scan
 const RPC_URL = process.env.OG_RPC_URL!;
 const INDEXER_RPC = process.env.INDEXER_RPC!;
 const privateKey = process.env.PRIVATE_KEY!;
-const FLOW_CONTRACT_ADDRESS = "0x56A565685C9992BF5ACafb940ff68922980DBBC5";
+const FLOW_CONTRACT_ADDRESS = process.env.OG_STORAGE_FLOW_CONTRACT || "0x22E03a6A89B950F1c82ec5e74F8eCa321a105296";
 
 let indexer: Indexer;
 let signer: ethers.Wallet;

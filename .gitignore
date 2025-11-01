@@ -26,12 +26,17 @@ yarn-error.log*
 
 # env files
 .env*
-#md files
-BUILD_FIXES.md
-DEPLOYMENT.md
+# Keep example env files
+!.env.example
+!.env.mainnet
+!.env.production.example
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# .md
+BUILD_FIXES.md
+DEPLOYMENT.md
+MAINNET_MIGRATION_GUIDE.md
