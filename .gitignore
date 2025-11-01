@@ -25,7 +25,6 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files
-.env*
 # Keep example env files
 !.env.example
 !.env.mainnet
@@ -40,3 +39,7 @@ next-env.d.ts
 BUILD_FIXES.md
 DEPLOYMENT.md
 MAINNET_MIGRATION_GUIDE.md
+OFF_CHAIN_VS_ON_CHAIN.md
+DEPLOYMENT_GUIDE.md
+QUICK_TEST_GUIDE.md
+config.bat
